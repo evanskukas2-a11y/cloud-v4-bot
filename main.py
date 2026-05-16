@@ -96,7 +96,35 @@ def dashboard():
             <h3>Status</h3>
             <p>{status}</p>
         </div>
+<div class="card">
 
+    <h3>Controls</h3>
+
+    <button style="
+        padding:12px 25px;
+        border:none;
+        border-radius:10px;
+        background:green;
+        color:white;
+        font-size:16px;
+        margin:10px;
+    ">
+        START BOT
+    </button>
+
+    <button style="
+        padding:12px 25px;
+        border:none;
+        border-radius:10px;
+        background:red;
+        color:white;
+        font-size:16px;
+        margin:10px;
+    ">
+        STOP BOT
+    </button>
+
+</div>
         <div class="card">
             <h3>Profit</h3>
             <p>{profit}</p>
