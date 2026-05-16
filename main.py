@@ -5,6 +5,7 @@ import websocket
 import json
 import threading
 import os
+from collections import Counter, deque
 
 app = FastAPI()
 
@@ -13,19 +14,34 @@ app = FastAPI()
 # =========================================
 
 status = "CONNECTING..."
-profit = 0
 bot_running = False
+confidence = 0
+signal = "WAITING..."
+last_digit = "-"
+tick_price = "-"
+
+# tick storage
+digits_history = deque(maxlen=50)
 
 # =========================================
-# DERIV CONNECTION
+# DERIV CONFIG
 # =========================================
 
 TOKEN = os.getenv("DERIV_TOKEN")
 APP_ID = "1089"
+SYMBOL = "R_50"
 
-def deriv_connection():
+# =========================================
+# DERIV ENGINE
+# =========================================
+
+def deriv_engine():
 
     global status
+    global confidence
+    global signal
+    global last_digit
+    global tick_price
 
     try:
 
@@ -33,28 +49,76 @@ def deriv_connection():
             f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
         )
 
+        # authorize
         ws.send(json.dumps({
             "authorize": TOKEN
         }))
 
-        response = json.loads(ws.recv())
+        auth_response = json.loads(ws.recv())
 
-        if "error" in response:
+        if "error" in auth_response:
             status = "AUTH FAILED"
+            return
 
-        else:
-            status = "CONNECTED TO DERIV"
+        status = "CONNECTED TO DERIV"
+
+        # subscribe ticks
+        ws.send(json.dumps({
+            "ticks": SYMBOL,
+            "subscribe": 1
+        }))
+
+        while True:
+
+            data = json.loads(ws.recv())
+
+            if "tick" in data:
+
+                price = data["tick"]["quote"]
+
+                tick_price = str(price)
+
+                # extract last digit
+                digit = int(str(price)[-1])
+
+                last_digit = digit
+
+                digits_history.append(digit)
+
+                # =================================
+                # DIGIT ANALYSIS
+                # =================================
+
+                counter = Counter(digits_history)
+
+                most_common_digit = counter.most_common(1)[0][0]
+                frequency = counter.most_common(1)[0][1]
+
+                # digit differ logic
+                if digit != most_common_digit:
+
+                    confidence = min(
+                        int((frequency / len(digits_history)) * 100),
+                        95
+                    )
+
+                    signal = f"DIFFER {most_common_digit}"
+
+                else:
+
+                    confidence = 20
+                    signal = "WAITING..."
 
     except Exception as e:
 
         status = f"ERROR: {e}"
 
 # =========================================
-# START DERIV CONNECTION
+# START ENGINE THREAD
 # =========================================
 
 threading.Thread(
-    target=deriv_connection,
+    target=deriv_engine,
     daemon=True
 ).start()
 
@@ -102,7 +166,9 @@ def dashboard():
 
     <head>
 
-        <title>PRO BOT CLOUD V4</title>
+        <title>DIGIT DIFFER ENGINE V1</title>
+
+        <meta http-equiv="refresh" content="2">
 
         <style>
 
@@ -137,7 +203,7 @@ def dashboard():
 
     <body>
 
-        <h1>PRO BOT CLOUD V4</h1>
+        <h1>DIGIT DIFFER ENGINE V1</h1>
 
         <h2>
         THE VENTURED KINGS LTD — EVANS MUKUKA
@@ -157,9 +223,23 @@ def dashboard():
 
         <div class="card">
 
-            <h3>Profit</h3>
+            <h3>Live Tick</h3>
 
-            <p>{profit}</p>
+            <p>{tick_price}</p>
+
+            <p>Last Digit: {last_digit}</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Signal</h3>
+
+            <p>{signal}</p>
+
+            <p>
+            Confidence: {confidence}%
+            </p>
 
         </div>
 
@@ -206,4 +286,4 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port
-    )
+)
