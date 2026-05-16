@@ -8,12 +8,17 @@ import os
 
 app = FastAPI()
 
+# =========================================
+# GLOBAL STATE
+# =========================================
+
 status = "CONNECTING..."
 profit = 0
+bot_running = False
 
-# =========================
+# =========================================
 # DERIV CONNECTION
-# =========================
+# =========================================
 
 TOKEN = os.getenv("DERIV_TOKEN")
 APP_ID = "1089"
@@ -44,15 +49,45 @@ def deriv_connection():
 
         status = f"ERROR: {e}"
 
-# =========================
+# =========================================
 # START CONNECTION THREAD
-# =========================
+# =========================================
 
 threading.Thread(target=deriv_connection, daemon=True).start()
 
-# =========================
+# =========================================
+# START BOT
+# =========================================
+
+@app.get("/start")
+def start_bot():
+
+    global bot_running
+
+    bot_running = True
+
+    return {
+        "message": "BOT STARTED"
+    }
+
+# =========================================
+# STOP BOT
+# =========================================
+
+@app.get("/stop")
+def stop_bot():
+
+    global bot_running
+
+    bot_running = False
+
+    return {
+        "message": "BOT STOPPED"
+    }
+
+# =========================================
 # DASHBOARD
-# =========================
+# =========================================
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
@@ -61,6 +96,7 @@ def dashboard():
     <html>
 
     <head>
+
         <title>PRO BOT CLOUD V4</title>
 
         <style>
@@ -80,6 +116,16 @@ def dashboard():
                 border-radius:10px;
             }}
 
+            button {{
+                padding:12px 25px;
+                border:none;
+                border-radius:10px;
+                color:white;
+                font-size:16px;
+                margin:10px;
+                cursor:pointer;
+            }}
+
         </style>
 
     </head>
@@ -93,41 +139,45 @@ def dashboard():
         </h2>
 
         <div class="card">
+
             <h3>Status</h3>
+
             <p>{status}</p>
+
+            <p>
+            Bot Running: {bot_running}
+            </p>
+
         </div>
-<div class="card">
 
-    <h3>Controls</h3>
-
-    <button style="
-        padding:12px 25px;
-        border:none;
-        border-radius:10px;
-        background:green;
-        color:white;
-        font-size:16px;
-        margin:10px;
-    ">
-        START BOT
-    </button>
-
-    <button style="
-        padding:12px 25px;
-        border:none;
-        border-radius:10px;
-        background:red;
-        color:white;
-        font-size:16px;
-        margin:10px;
-    ">
-        STOP BOT
-    </button>
-
-</div>
         <div class="card">
+
             <h3>Profit</h3>
+
             <p>{profit}</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Controls</h3>
+
+            <a href="/start">
+
+                <button style="background:green;">
+                    START BOT
+                </button>
+
+            </a>
+
+            <a href="/stop">
+
+                <button style="background:red;">
+                    STOP BOT
+                </button>
+
+            </a>
+
         </div>
 
     </body>
@@ -135,9 +185,9 @@ def dashboard():
     </html>
     """
 
-# =========================
+# =========================================
 # RUN SERVER
-# =========================
+# =========================================
 
 if __name__ == "__main__":
 
