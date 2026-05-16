@@ -1,11 +1,58 @@
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import uvicorn
+import websocket
+import json
+import threading
+import os
 
 app = FastAPI()
 
+status = "CONNECTING..."
 profit = 0
-status = "RUNNING"
+
+# =========================
+# DERIV CONNECTION
+# =========================
+
+TOKEN = os.getenv("DERIV_TOKEN")
+APP_ID = "1089"
+
+def deriv_connection():
+
+    global status
+
+    try:
+
+        ws = websocket.create_connection(
+            f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
+        )
+
+        ws.send(json.dumps({
+            "authorize": TOKEN
+        }))
+
+        response = json.loads(ws.recv())
+
+        if "error" in response:
+            status = "AUTH FAILED"
+
+        else:
+            status = "CONNECTED TO DERIV"
+
+    except Exception as e:
+
+        status = f"ERROR: {e}"
+
+# =========================
+# START CONNECTION THREAD
+# =========================
+
+threading.Thread(target=deriv_connection, daemon=True).start()
+
+# =========================
+# DASHBOARD
+# =========================
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
@@ -14,7 +61,7 @@ def dashboard():
     <html>
 
     <head>
-        <title>PRO BOT CLOUD V3</title>
+        <title>PRO BOT CLOUD V4</title>
 
         <style>
 
@@ -33,21 +80,13 @@ def dashboard():
                 border-radius:10px;
             }}
 
-            button {{
-                padding:10px 20px;
-                border:none;
-                border-radius:10px;
-                margin:10px;
-                cursor:pointer;
-            }}
-
         </style>
 
     </head>
 
     <body>
 
-        <h1>PRO BOT CLOUD V3 FINAL</h1>
+        <h1>PRO BOT CLOUD V4</h1>
 
         <h2>
         THE VENTURED KINGS LTD — EVANS MUKUKA
@@ -63,18 +102,16 @@ def dashboard():
             <p>{profit}</p>
         </div>
 
-        <button>START BOT</button>
-        <button>STOP BOT</button>
-
     </body>
 
     </html>
     """
 
+# =========================
+# RUN SERVER
+# =========================
 
 if __name__ == "__main__":
-
-    import os
 
     port = int(os.environ.get("PORT", 8000))
 
