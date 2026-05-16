@@ -6,6 +6,7 @@ import json
 import threading
 import os
 from collections import Counter, deque
+import time
 
 app = FastAPI()
 
@@ -15,24 +16,39 @@ app = FastAPI()
 
 status = "CONNECTING..."
 bot_running = False
+
 confidence = 0
 signal = "WAITING..."
+
 last_digit = "-"
 tick_price = "-"
 
-# tick storage
-digits_history = deque(maxlen=50)
+market_condition = "NORMAL"
+
+wins = 0
+losses = 0
+
+cooldown = 0
+
+# =========================================
+# STORAGE
+# =========================================
+
+digits_history = deque(maxlen=100)
+signal_history = deque(maxlen=20)
 
 # =========================================
 # DERIV CONFIG
 # =========================================
 
 TOKEN = os.getenv("DERIV_TOKEN")
+
 APP_ID = "1089"
+
 SYMBOL = "R_50"
 
 # =========================================
-# DERIV ENGINE
+# MARKET ENGINE
 # =========================================
 
 def deriv_engine():
@@ -42,6 +58,8 @@ def deriv_engine():
     global signal
     global last_digit
     global tick_price
+    global market_condition
+    global cooldown
 
     try:
 
@@ -49,7 +67,7 @@ def deriv_engine():
             f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
         )
 
-        # authorize
+        # AUTHORIZE
         ws.send(json.dumps({
             "authorize": TOKEN
         }))
@@ -57,12 +75,14 @@ def deriv_engine():
         auth_response = json.loads(ws.recv())
 
         if "error" in auth_response:
+
             status = "AUTH FAILED"
+
             return
 
         status = "CONNECTED TO DERIV"
 
-        # subscribe ticks
+        # SUBSCRIBE TICKS
         ws.send(json.dumps({
             "ticks": SYMBOL,
             "subscribe": 1
@@ -78,36 +98,110 @@ def deriv_engine():
 
                 tick_price = str(price)
 
-                # extract last digit
+                # =========================
+                # LAST DIGIT
+                # =========================
+
                 digit = int(str(price)[-1])
 
                 last_digit = digit
 
                 digits_history.append(digit)
 
-                # =================================
-                # DIGIT ANALYSIS
-                # =================================
+                # =========================
+                # WAIT FOR ENOUGH DATA
+                # =========================
+
+                if len(digits_history) < 30:
+                    continue
+
+                # =========================
+                # DIGIT PRESSURE ANALYSIS
+                # =========================
 
                 counter = Counter(digits_history)
 
                 most_common_digit = counter.most_common(1)[0][0]
                 frequency = counter.most_common(1)[0][1]
 
-                # digit differ logic
-                if digit != most_common_digit:
+                ratio = frequency / len(digits_history)
 
-                    confidence = min(
-                        int((frequency / len(digits_history)) * 100),
-                        95
-                    )
+                # =========================
+                # STREAK FILTER
+                # =========================
 
-                    signal = f"DIFFER {most_common_digit}"
+                recent_digits = list(digits_history)[-5:]
+
+                repeated_count = recent_digits.count(
+                    recent_digits[-1]
+                )
+
+                # dangerous market
+                if repeated_count >= 4:
+
+                    market_condition = "VOLATILE"
+
+                    signal = "BLOCKED"
+
+                    confidence = 10
+
+                    continue
 
                 else:
 
-                    confidence = 20
+                    market_condition = "NORMAL"
+
+                # =========================
+                # COOLDOWN SYSTEM
+                # =========================
+
+                if cooldown > 0:
+
+                    cooldown -= 1
+
+                    signal = "COOLDOWN"
+
+                    confidence = 15
+
+                    continue
+
+                # =========================
+                # DIFFER SIGNAL ENGINE
+                # =========================
+
+                if digit != most_common_digit:
+
+                    confidence = min(
+                        int(ratio * 100),
+                        95
+                    )
+
+                    # only strong entries
+                    if confidence >= 55:
+
+                        signal = f"DIFFER {most_common_digit}"
+
+                        signal_history.append(signal)
+
+                    else:
+
+                        signal = "WAITING..."
+
+                else:
+
                     signal = "WAITING..."
+
+                    confidence = 20
+
+                # =========================
+                # LOSS PROTECTION
+                # =========================
+
+                if confidence < 40:
+
+                    cooldown = 3
+
+                time.sleep(0.2)
 
     except Exception as e:
 
@@ -166,7 +260,7 @@ def dashboard():
 
     <head>
 
-        <title>DIGIT DIFFER ENGINE V1</title>
+        <title>DIGIT DIFFER ENGINE V2</title>
 
         <meta http-equiv="refresh" content="2">
 
@@ -203,7 +297,7 @@ def dashboard():
 
     <body>
 
-        <h1>DIGIT DIFFER ENGINE V1</h1>
+        <h1>DIGIT DIFFER ENGINE V2</h1>
 
         <h2>
         THE VENTURED KINGS LTD — EVANS MUKUKA
@@ -223,23 +317,35 @@ def dashboard():
 
         <div class="card">
 
-            <h3>Live Tick</h3>
+            <h3>Market</h3>
 
-            <p>{tick_price}</p>
+            <p>Tick: {tick_price}</p>
 
             <p>Last Digit: {last_digit}</p>
+
+            <p>Condition: {market_condition}</p>
 
         </div>
 
         <div class="card">
 
-            <h3>Signal</h3>
+            <h3>Signal Engine</h3>
 
             <p>{signal}</p>
 
             <p>
             Confidence: {confidence}%
             </p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Performance</h3>
+
+            <p>Wins: {wins}</p>
+
+            <p>Losses: {losses}</p>
 
         </div>
 
