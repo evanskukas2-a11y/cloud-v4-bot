@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 import uvicorn
 import websocket
 import json
@@ -50,10 +50,13 @@ def deriv_connection():
         status = f"ERROR: {e}"
 
 # =========================================
-# START CONNECTION THREAD
+# START DERIV CONNECTION
 # =========================================
 
-threading.Thread(target=deriv_connection, daemon=True).start()
+threading.Thread(
+    target=deriv_connection,
+    daemon=True
+).start()
 
 # =========================================
 # START BOT
@@ -66,9 +69,10 @@ def start_bot():
 
     bot_running = True
 
-    return {
-        "message": "BOT STARTED"
-    }
+    return RedirectResponse(
+        url="/",
+        status_code=303
+    )
 
 # =========================================
 # STOP BOT
@@ -81,9 +85,10 @@ def stop_bot():
 
     bot_running = False
 
-    return {
-        "message": "BOT STOPPED"
-    }
+    return RedirectResponse(
+        url="/",
+        status_code=303
+    )
 
 # =========================================
 # DASHBOARD
@@ -113,7 +118,7 @@ def dashboard():
                 background:#1e293b;
                 padding:20px;
                 margin:20px;
-                border-radius:10px;
+                border-radius:12px;
             }}
 
             button {{
@@ -160,47 +165,29 @@ def dashboard():
 
         <div class="card">
 
-    <h3>Controls</h3>
+            <h3>Controls</h3>
 
-    <form action="/start" method="get">
+            <form action="/start" method="get">
 
-        <button
-            type="submit"
-            style="
-                background:green;
-                padding:12px 25px;
-                border:none;
-                border-radius:10px;
-                color:white;
-                font-size:16px;
-                margin:10px;
-                cursor:pointer;
-            ">
-            START BOT
-        </button>
+                <button
+                    type="submit"
+                    style="background:green;">
+                    START BOT
+                </button>
 
-    </form>
+            </form>
 
-    <form action="/stop" method="get">
+            <form action="/stop" method="get">
 
-        <button
-            type="submit"
-            style="
-                background:red;
-                padding:12px 25px;
-                border:none;
-                border-radius:10px;
-                color:white;
-                font-size:16px;
-                margin:10px;
-                cursor:pointer;
-            ">
-            STOP BOT
-        </button>
+                <button
+                    type="submit"
+                    style="background:red;">
+                    STOP BOT
+                </button>
 
-    </form>
+            </form>
 
-</div>
+        </div>
 
     </body>
 
@@ -215,4 +202,8 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 8000))
 
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port
+    )
