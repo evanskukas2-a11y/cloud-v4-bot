@@ -160,25 +160,47 @@ def dashboard():
 
         <div class="card">
 
-            <h3>Controls</h3>
+    <h3>Controls</h3>
 
-            <a href="/start">
+    <form action="/start" method="get">
 
-                <button style="background:green;">
-                    START BOT
-                </button>
+        <button
+            type="submit"
+            style="
+                background:green;
+                padding:12px 25px;
+                border:none;
+                border-radius:10px;
+                color:white;
+                font-size:16px;
+                margin:10px;
+                cursor:pointer;
+            ">
+            START BOT
+        </button>
 
-            </a>
+    </form>
 
-            <a href="/stop">
+    <form action="/stop" method="get">
 
-                <button style="background:red;">
-                    STOP BOT
-                </button>
+        <button
+            type="submit"
+            style="
+                background:red;
+                padding:12px 25px;
+                border:none;
+                border-radius:10px;
+                color:white;
+                font-size:16px;
+                margin:10px;
+                cursor:pointer;
+            ">
+            STOP BOT
+        </button>
 
-            </a>
+    </form>
 
-        </div>
+</div>
 
     </body>
 
