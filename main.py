@@ -197,7 +197,7 @@ def deriv_engine():
                     recent_digits[-1]
                 )
 
-                if repeated_count >= 4:
+                if repeated_count >= 5:
 
                     market_condition = "VOLATILE"
 
@@ -271,9 +271,9 @@ def deriv_engine():
 
                 if confidence < 15:
 
-                    cooldown = 3
+                    cooldown = 1
 
-                time.sleep(0.2)
+                time.sleep(0.05)
 
     except Exception as e:
 
