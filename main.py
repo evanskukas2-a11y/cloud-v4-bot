@@ -294,7 +294,9 @@ def dashboard():
     <body>
 
         <h1>DIGIT DIFFER ENGINE</h1>
-
+<h2>
+THE VENTURED KINGS LTD — EVANS MUKUKA
+</h2>
         <div class="card">
 
             <h3>Status</h3>
