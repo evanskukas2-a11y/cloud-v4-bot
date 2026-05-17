@@ -236,7 +236,7 @@ def deriv_engine():
                         95
                     )
 
-                    if confidence >= 55:
+                    if confidence >= 20:
 
                         signal = f"DIFFER {most_common_digit}"
 
@@ -269,7 +269,7 @@ def deriv_engine():
                 # SAFETY COOLDOWN
                 # =================================
 
-                if confidence < 40:
+                if confidence < 15:
 
                     cooldown = 3
 
