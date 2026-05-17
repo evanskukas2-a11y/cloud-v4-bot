@@ -149,7 +149,7 @@ def deriv_engine():
 
                 confidence = random.randint(25, 90)
 
-                if confidence >= 40:
+                if confidence >= 65:
 
                     signal = f"DIFFER {random.randint(0,9)}"
 
