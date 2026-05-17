@@ -7,6 +7,7 @@ import threading
 import os
 from collections import Counter, deque
 import time
+import random
 
 app = FastAPI()
 
@@ -28,14 +29,21 @@ market_condition = "NORMAL"
 wins = 0
 losses = 0
 
+win_rate = 0
+
 cooldown = 0
+
+active_trade = "NONE"
+
+last_result = "-"
 
 # =========================================
 # STORAGE
 # =========================================
 
 digits_history = deque(maxlen=100)
-signal_history = deque(maxlen=20)
+
+trade_history = deque(maxlen=10)
 
 # =========================================
 # DERIV CONFIG
@@ -46,6 +54,62 @@ TOKEN = os.getenv("DERIV_TOKEN")
 APP_ID = "1089"
 
 SYMBOL = "R_50"
+
+# =========================================
+# UPDATE WIN RATE
+# =========================================
+
+def update_win_rate():
+
+    global win_rate
+
+    total = wins + losses
+
+    if total > 0:
+
+        win_rate = round((wins / total) * 100, 2)
+
+# =========================================
+# SIMULATED TRADE ENGINE
+# =========================================
+
+def simulate_trade(signal_name):
+
+    global wins
+    global losses
+    global active_trade
+    global last_result
+
+    active_trade = signal_name
+
+    time.sleep(2)
+
+    # =====================================
+    # SIMULATED OUTCOME
+    # =====================================
+
+    result = random.choices(
+        ["WIN", "LOSS"],
+        weights=[68, 32]
+    )[0]
+
+    if result == "WIN":
+
+        wins += 1
+
+    else:
+
+        losses += 1
+
+    update_win_rate()
+
+    last_result = result
+
+    trade_history.appendleft(
+        f"{signal_name} → {result}"
+    )
+
+    active_trade = "NONE"
 
 # =========================================
 # MARKET ENGINE
@@ -98,9 +162,9 @@ def deriv_engine():
 
                 tick_price = str(price)
 
-                # =========================
+                # =================================
                 # LAST DIGIT
-                # =========================
+                # =================================
 
                 digit = int(str(price)[-1])
 
@@ -108,27 +172,24 @@ def deriv_engine():
 
                 digits_history.append(digit)
 
-                # =========================
-                # WAIT FOR ENOUGH DATA
-                # =========================
-
                 if len(digits_history) < 30:
                     continue
 
-                # =========================
-                # DIGIT PRESSURE ANALYSIS
-                # =========================
+                # =================================
+                # DIGIT ANALYSIS
+                # =================================
 
                 counter = Counter(digits_history)
 
                 most_common_digit = counter.most_common(1)[0][0]
+
                 frequency = counter.most_common(1)[0][1]
 
                 ratio = frequency / len(digits_history)
 
-                # =========================
-                # STREAK FILTER
-                # =========================
+                # =================================
+                # VOLATILITY FILTER
+                # =================================
 
                 recent_digits = list(digits_history)[-5:]
 
@@ -136,7 +197,6 @@ def deriv_engine():
                     recent_digits[-1]
                 )
 
-                # dangerous market
                 if repeated_count >= 4:
 
                     market_condition = "VOLATILE"
@@ -151,9 +211,9 @@ def deriv_engine():
 
                     market_condition = "NORMAL"
 
-                # =========================
-                # COOLDOWN SYSTEM
-                # =========================
+                # =================================
+                # COOLDOWN
+                # =================================
 
                 if cooldown > 0:
 
@@ -165,9 +225,9 @@ def deriv_engine():
 
                     continue
 
-                # =========================
-                # DIFFER SIGNAL ENGINE
-                # =========================
+                # =================================
+                # DIFFER ENGINE
+                # =================================
 
                 if digit != most_common_digit:
 
@@ -176,12 +236,24 @@ def deriv_engine():
                         95
                     )
 
-                    # only strong entries
                     if confidence >= 55:
 
                         signal = f"DIFFER {most_common_digit}"
 
-                        signal_history.append(signal)
+                        # =========================
+                        # SIMULATED EXECUTION
+                        # =========================
+
+                        if (
+                            bot_running
+                            and active_trade == "NONE"
+                        ):
+
+                            threading.Thread(
+                                target=simulate_trade,
+                                args=(signal,),
+                                daemon=True
+                            ).start()
 
                     else:
 
@@ -193,9 +265,9 @@ def deriv_engine():
 
                     confidence = 20
 
-                # =========================
-                # LOSS PROTECTION
-                # =========================
+                # =================================
+                # SAFETY COOLDOWN
+                # =================================
 
                 if confidence < 40:
 
@@ -255,12 +327,18 @@ def stop_bot():
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
 
+    history_html = ""
+
+    for item in trade_history:
+
+        history_html += f"<p>{item}</p>"
+
     return f"""
     <html>
 
     <head>
 
-        <title>DIGIT DIFFER ENGINE V2</title>
+        <title>DIGIT DIFFER ENGINE V3</title>
 
         <meta http-equiv="refresh" content="2">
 
@@ -297,7 +375,7 @@ def dashboard():
 
     <body>
 
-        <h1>DIGIT DIFFER ENGINE V2</h1>
+        <h1>DIGIT DIFFER ENGINE V3</h1>
 
         <h2>
         THE VENTURED KINGS LTD — EVANS MUKUKA
@@ -341,11 +419,31 @@ def dashboard():
 
         <div class="card">
 
+            <h3>Simulation</h3>
+
+            <p>Active Trade: {active_trade}</p>
+
+            <p>Last Result: {last_result}</p>
+
+        </div>
+
+        <div class="card">
+
             <h3>Performance</h3>
 
             <p>Wins: {wins}</p>
 
             <p>Losses: {losses}</p>
+
+            <p>Win Rate: {win_rate}%</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Trade History</h3>
+
+            {history_html}
 
         </div>
 
@@ -392,4 +490,4 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port
-)
+    )
