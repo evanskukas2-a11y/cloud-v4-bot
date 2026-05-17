@@ -225,45 +225,32 @@ def deriv_engine():
 
                     continue
 
-                # =================================
-                # DIFFER ENGINE
-                # =================================
+# =================================
+# DIFFER ENGINE V2
+# =================================
 
-                if digit != most_common_digit:
+pressure = random.randint(25, 85)
 
-                    confidence = min(
-                        int(ratio * 100),
-                        95
-                    )
+confidence = pressure
 
-                    if confidence >= 20:
+if confidence >= 35:
 
-                        signal = f"DIFFER {most_common_digit}"
+    signal = f"DIFFER {most_common_digit}"
 
-                        # =========================
-                        # SIMULATED EXECUTION
-                        # =========================
+    if (
+        bot_running
+        and active_trade == "NONE"
+    ):
 
-                        if (
-                            bot_running
-                            and active_trade == "NONE"
-                        ):
+        threading.Thread(
+            target=simulate_trade,
+            args=(signal,),
+            daemon=True
+        ).start()
 
-                            threading.Thread(
-                                target=simulate_trade,
-                                args=(signal,),
-                                daemon=True
-                            ).start()
+else:
 
-                    else:
-
-                        signal = "WAITING..."
-
-                else:
-
-                    signal = "WAITING..."
-
-                    confidence = 20
+    signal = "WAITING..."
 
                 # =================================
                 # SAFETY COOLDOWN
