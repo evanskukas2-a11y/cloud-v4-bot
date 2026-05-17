@@ -41,6 +41,28 @@ last_result = "-"
 trade_history = deque(maxlen=10)
 
 # ======================================
+# MONEY MANAGEMENT
+# ======================================
+
+starting_balance = 100
+
+balance = 100
+
+base_stake = 0.35
+
+current_stake = 0.35
+
+martingale_multiplier = 2.2
+
+take_profit = 10
+
+stop_loss = 10
+
+profit = 0
+
+loss_streak = 0
+
+# ======================================
 # CONFIG
 # ======================================
 
@@ -68,6 +90,22 @@ def update_win_rate():
         )
 
 # ======================================
+# CHECK TP / SL
+# ======================================
+
+def check_limits():
+
+    global bot_running
+
+    if profit >= take_profit:
+
+        bot_running = False
+
+    if profit <= -stop_loss:
+
+        bot_running = False
+
+# ======================================
 # SIMULATED TRADE
 # ======================================
 
@@ -78,29 +116,72 @@ def simulate_trade(signal_name):
     global active_trade
     global last_result
 
+    global balance
+    global current_stake
+    global profit
+    global loss_streak
+
     active_trade = signal_name
 
     time.sleep(2)
 
-    result = random.choice([
-        "WIN",
-        "LOSS"
-    ])
+    # ==================================
+    # SIMULATION OUTCOME
+    # ==================================
+
+    result = random.choices(
+        ["WIN", "LOSS"],
+        weights=[58, 42]
+    )[0]
+
+    # ==================================
+    # WIN
+    # ==================================
 
     if result == "WIN":
 
         wins += 1
 
+        trade_profit = round(
+            current_stake * 0.9,
+            2
+        )
+
+        balance += trade_profit
+
+        profit += trade_profit
+
+        current_stake = base_stake
+
+        loss_streak = 0
+
+    # ==================================
+    # LOSS
+    # ==================================
+
     else:
 
         losses += 1
 
+        balance -= current_stake
+
+        profit -= current_stake
+
+        loss_streak += 1
+
+        current_stake = round(
+            current_stake * martingale_multiplier,
+            2
+        )
+
     update_win_rate()
+
+    check_limits()
 
     last_result = result
 
     trade_history.appendleft(
-        f"{signal_name} → {result}"
+        f"{signal_name} | {result} | Stake: ${current_stake}"
     )
 
     active_trade = "NONE"
@@ -123,7 +204,6 @@ def deriv_engine():
             f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
         )
 
-        # AUTHORIZE
         ws.send(json.dumps({
             "authorize": TOKEN
         }))
@@ -138,7 +218,6 @@ def deriv_engine():
 
         status = "CONNECTED TO DERIV"
 
-        # SUBSCRIBE
         ws.send(json.dumps({
             "ticks": SYMBOL,
             "subscribe": 1
@@ -154,17 +233,14 @@ def deriv_engine():
 
                 tick_price = str(price)
 
-                # SAFE LAST DIGIT
                 price_str = f"{price:.2f}"
 
                 digit = int(price_str[-1])
 
                 last_digit = digit
 
-                # RANDOM TEST CONFIDENCE
                 confidence = random.randint(25, 90)
 
-                # SIGNAL
                 if confidence >= 60:
 
                     signal = f"DIFFER {random.randint(0,9)}"
@@ -250,7 +326,7 @@ def dashboard():
 
     <head>
 
-        <title>DIGIT DIFFER ENGINE</title>
+        <title>DIGIT DIFFER ENGINE V5</title>
 
         <meta http-equiv="refresh" content="2">
 
@@ -293,19 +369,19 @@ def dashboard():
 
     <body>
 
-        <h1>DIGIT DIFFER ENGINE</h1>
-<h2>
-THE VENTURED KINGS LTD — EVANS MUKUKA
-</h2>
+        <h1>DIGIT DIFFER ENGINE V5</h1>
+
+        <h2>
+        THE VENTURED KINGS LTD — EVANS MUKUKA
+        </h2>
+
         <div class="card">
 
             <h3>Status</h3>
 
             <p>{status}</p>
 
-            <p>
-            Bot Running: {bot_running}
-            </p>
+            <p>Bot Running: {bot_running}</p>
 
         </div>
 
@@ -325,23 +401,35 @@ THE VENTURED KINGS LTD — EVANS MUKUKA
 
             <p>{signal}</p>
 
-            <p>
-            Confidence: {confidence}%
-            </p>
+            <p>Confidence: {confidence}%</p>
 
         </div>
 
         <div class="card">
 
-            <h3>Simulation</h3>
+            <h3>Money Management</h3>
 
-            <p>
-            Active Trade: {active_trade}
-            </p>
+            <p>Balance: ${round(balance,2)}</p>
 
-            <p>
-            Last Result: {last_result}
-            </p>
+            <p>Profit/Loss: ${round(profit,2)}</p>
+
+            <p>Current Stake: ${current_stake}</p>
+
+            <p>Loss Streak: {loss_streak}</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Settings</h3>
+
+            <p>Base Stake: ${base_stake}</p>
+
+            <p>Martingale: x{martingale_multiplier}</p>
+
+            <p>Take Profit: ${take_profit}</p>
+
+            <p>Stop Loss: ${stop_loss}</p>
 
         </div>
 
