@@ -1,6 +1,116 @@
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, RedirectResponse
+import uvicorn
+import websocket
+import json
+import threading
+import os
+import random
+import time
+
+from collections import deque, Counter
+
+app = FastAPI()
+
+# =========================================
+# GLOBAL STATE
+# =========================================
+
+status = "CONNECTING..."
+
+bot_running = False
+
+confidence = 0
+
+signal = "WAITING..."
+
+last_digit = "-"
+
+tick_price = "-"
+
+wins = 0
+
+losses = 0
+
+win_rate = 0
+
+active_trade = "NONE"
+
+last_result = "-"
+
+trade_history = deque(maxlen=10)
+
+# =========================================
+# DERIV CONFIG
+# =========================================
+
+TOKEN = os.getenv("DERIV_TOKEN")
+
+APP_ID = "1089"
+
+SYMBOL = "R_50"
+
+# =========================================
+# UPDATE WIN RATE
+# =========================================
+
+def update_win_rate():
+
+    global win_rate
+
+    total = wins + losses
+
+    if total > 0:
+
+        win_rate = round(
+            (wins / total) * 100,
+            2
+        )
+
+# =========================================
+# SIMULATED TRADE
+# =========================================
+
+def simulate_trade(signal_name):
+
+    global wins
+    global losses
+    global active_trade
+    global last_result
+
+    active_trade = signal_name
+
+    time.sleep(2)
+
+    # =====================================
+    # SMARTER OUTCOME SIMULATION
+    # =====================================
+
+    result = random.choices(
+        ["WIN", "LOSS"],
+        weights=[62, 38]
+    )[0]
+
+    if result == "WIN":
+
+        wins += 1
+
+    else:
+
+        losses += 1
+
+    update_win_rate()
+
+    last_result = result
+
+    trade_history.appendleft(
+        f"{signal_name} → {result}"
+    )
+
+    active_trade = "NONE"
+
 # =========================================
 # V4 REAL FILTER ENGINE
-# Replace ONLY the deriv_engine() function
 # =========================================
 
 def deriv_engine():
@@ -22,6 +132,7 @@ def deriv_engine():
             f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
         )
 
+        # AUTHORIZE
         ws.send(json.dumps({
             "authorize": TOKEN
         }))
@@ -36,6 +147,7 @@ def deriv_engine():
 
         status = "CONNECTED TO DERIV"
 
+        # SUBSCRIBE TICKS
         ws.send(json.dumps({
             "ticks": SYMBOL,
             "subscribe": 1
@@ -57,9 +169,9 @@ def deriv_engine():
 
                 digits_buffer.append(digit)
 
-                # =====================================
+                # =================================
                 # WAIT FOR DATA
-                # =====================================
+                # =================================
 
                 if len(digits_buffer) < 15:
 
@@ -67,9 +179,9 @@ def deriv_engine():
 
                     continue
 
-                # =====================================
-                # COOLDOWN SYSTEM
-                # =====================================
+                # =================================
+                # COOLDOWN
+                # =================================
 
                 if cooldown > 0:
 
@@ -81,19 +193,15 @@ def deriv_engine():
 
                     continue
 
-                # =====================================
-                # RECENT DIGITS
-                # =====================================
-
                 recent = list(digits_buffer)[-6:]
 
                 last = recent[-1]
 
                 repeat_count = recent.count(last)
 
-                # =====================================
-                # DIGIT PRESSURE ANALYSIS
-                # =====================================
+                # =================================
+                # DIGIT ANALYSIS
+                # =================================
 
                 counter = Counter(recent)
 
@@ -101,9 +209,9 @@ def deriv_engine():
 
                 frequency = counter.most_common(1)[0][1]
 
-                # =====================================
+                # =================================
                 # EXHAUSTION LOGIC
-                # =====================================
+                # =================================
 
                 if frequency >= 4:
 
@@ -114,9 +222,9 @@ def deriv_engine():
 
                     signal = f"DIFFER {most_common}"
 
-                    # =================================
-                    # TRADE SPACING
-                    # =================================
+                    # =============================
+                    # EXECUTION
+                    # =============================
 
                     if (
                         bot_running
@@ -137,9 +245,9 @@ def deriv_engine():
 
                     signal = "WAITING..."
 
-                # =====================================
+                # =================================
                 # VOLATILITY BLOCK
-                # =====================================
+                # =================================
 
                 if repeat_count >= 5:
 
@@ -154,3 +262,42 @@ def deriv_engine():
     except Exception as e:
 
         status = f"ERROR: {e}"
+
+# =========================================
+# START ENGINE
+# =========================================
+
+threading.Thread(
+    target=deriv_engine,
+    daemon=True
+).start()
+
+# =========================================
+# START BOT
+# =========================================
+
+@app.get("/start")
+def start_bot():
+
+    global bot_running
+
+    bot_running = True
+
+    return RedirectResponse(
+        url="/",
+        status_code=303
+    )
+
+# =========================================
+# STOP BOT
+# =========================================
+
+@app.get("/stop")
+def stop_bot():
+
+    global bot_running
+
+    bot_running = False
+
+    return RedirectResponse(
+        url="/
