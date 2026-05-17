@@ -5,9 +5,9 @@ import websocket
 import json
 import threading
 import os
-from collections import Counter, deque
-import time
+from collections import deque
 import random
+import time
 
 app = FastAPI()
 
@@ -24,24 +24,12 @@ signal = "WAITING..."
 last_digit = "-"
 tick_price = "-"
 
-market_condition = "NORMAL"
-
 wins = 0
 losses = 0
-
 win_rate = 0
 
-cooldown = 0
-
 active_trade = "NONE"
-
 last_result = "-"
-
-# =========================================
-# STORAGE
-# =========================================
-
-digits_history = deque(maxlen=100)
 
 trade_history = deque(maxlen=10)
 
@@ -50,9 +38,7 @@ trade_history = deque(maxlen=10)
 # =========================================
 
 TOKEN = os.getenv("DERIV_TOKEN")
-
 APP_ID = "1089"
-
 SYMBOL = "R_50"
 
 # =========================================
@@ -70,7 +56,7 @@ def update_win_rate():
         win_rate = round((wins / total) * 100, 2)
 
 # =========================================
-# SIMULATED TRADE ENGINE
+# SIMULATED TRADE
 # =========================================
 
 def simulate_trade(signal_name):
@@ -84,14 +70,10 @@ def simulate_trade(signal_name):
 
     time.sleep(2)
 
-    # =====================================
-    # SIMULATED OUTCOME
-    # =====================================
-
-    result = random.choices(
-        ["WIN", "LOSS"],
-        weights=[68, 32]
-    )[0]
+    result = random.choice([
+        "WIN",
+        "LOSS"
+    ])
 
     if result == "WIN":
 
@@ -122,8 +104,6 @@ def deriv_engine():
     global signal
     global last_digit
     global tick_price
-    global market_condition
-    global cooldown
 
     try:
 
@@ -131,22 +111,19 @@ def deriv_engine():
             f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
         )
 
-        # AUTHORIZE
         ws.send(json.dumps({
             "authorize": TOKEN
         }))
 
-        auth_response = json.loads(ws.recv())
+        auth = json.loads(ws.recv())
 
-        if "error" in auth_response:
+        if "error" in auth:
 
             status = "AUTH FAILED"
-
             return
 
         status = "CONNECTED TO DERIV"
 
-        # SUBSCRIBE TICKS
         ws.send(json.dumps({
             "ticks": SYMBOL,
             "subscribe": 1
@@ -162,112 +139,43 @@ def deriv_engine():
 
                 tick_price = str(price)
 
-                # =================================
-                # LAST DIGIT
-                # =================================
-
                 digit = int(str(price)[-1])
 
                 last_digit = digit
 
-                digits_history.append(digit)
+                # =========================
+                # TEST CONFIDENCE
+                # =========================
 
-                if len(digits_history) < 30:
-                    continue
+                confidence = random.randint(25, 90)
 
-                # =================================
-                # DIGIT ANALYSIS
-                # =================================
+                if confidence >= 40:
 
-                counter = Counter(digits_history)
+                    signal = f"DIFFER {random.randint(0,9)}"
 
-                most_common_digit = counter.most_common(1)[0][0]
+                    if (
+                        bot_running
+                        and active_trade == "NONE"
+                    ):
 
-                frequency = counter.most_common(1)[0][1]
-
-                ratio = frequency / len(digits_history)
-
-                # =================================
-                # VOLATILITY FILTER
-                # =================================
-
-                recent_digits = list(digits_history)[-5:]
-
-                repeated_count = recent_digits.count(
-                    recent_digits[-1]
-                )
-
-                if repeated_count >= 5:
-
-                    market_condition = "VOLATILE"
-
-                    signal = "BLOCKED"
-
-                    confidence = 10
-
-                    continue
+                        threading.Thread(
+                            target=simulate_trade,
+                            args=(signal,),
+                            daemon=True
+                        ).start()
 
                 else:
 
-                    market_condition = "NORMAL"
+                    signal = "WAITING..."
 
-                # =================================
-                # COOLDOWN
-                # =================================
-
-                if cooldown > 0:
-
-                    cooldown -= 1
-
-                    signal = "COOLDOWN"
-
-                    confidence = 15
-
-                    continue
-
-# =================================
-# DIFFER ENGINE V2
-# =================================
-
-pressure = random.randint(25, 85)
-
-confidence = pressure
-
-if confidence >= 35:
-
-    signal = f"DIFFER {most_common_digit}"
-
-    if (
-        bot_running
-        and active_trade == "NONE"
-    ):
-
-        threading.Thread(
-            target=simulate_trade,
-            args=(signal,),
-            daemon=True
-        ).start()
-
-else:
-
-    signal = "WAITING..."
-
-                # =================================
-                # SAFETY COOLDOWN
-                # =================================
-
-                if confidence < 15:
-
-                    cooldown = 1
-
-                time.sleep(0.05)
+                time.sleep(0.2)
 
     except Exception as e:
 
         status = f"ERROR: {e}"
 
 # =========================================
-# START ENGINE THREAD
+# START ENGINE
 # =========================================
 
 threading.Thread(
@@ -374,9 +282,7 @@ def dashboard():
 
             <p>{status}</p>
 
-            <p>
-            Bot Running: {bot_running}
-            </p>
+            <p>Bot Running: {bot_running}</p>
 
         </div>
 
@@ -388,8 +294,6 @@ def dashboard():
 
             <p>Last Digit: {last_digit}</p>
 
-            <p>Condition: {market_condition}</p>
-
         </div>
 
         <div class="card">
@@ -398,9 +302,7 @@ def dashboard():
 
             <p>{signal}</p>
 
-            <p>
-            Confidence: {confidence}%
-            </p>
+            <p>Confidence: {confidence}%</p>
 
         </div>
 
@@ -477,4 +379,4 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port
-    )
+)
