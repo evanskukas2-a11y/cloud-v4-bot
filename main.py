@@ -163,7 +163,9 @@ def deriv_engine():
 
                 tick_price = str(price)
 
-                digit = int(str(price)[-1])
+                price_str = f"{price:.2f}"
+
+digit = int(price_str[-1])
 
                 last_digit = digit
 
