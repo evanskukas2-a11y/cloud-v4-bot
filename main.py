@@ -8,13 +8,13 @@ import os
 import random
 import time
 
-from collections import deque, Counter
+from collections import deque
 
 app = FastAPI()
 
-# =========================================
-# GLOBAL STATE
-# =========================================
+# ======================================
+# GLOBALS
+# ======================================
 
 status = "CONNECTING..."
 
@@ -40,9 +40,9 @@ last_result = "-"
 
 trade_history = deque(maxlen=10)
 
-# =========================================
-# DERIV CONFIG
-# =========================================
+# ======================================
+# CONFIG
+# ======================================
 
 TOKEN = os.getenv("DERIV_TOKEN")
 
@@ -50,9 +50,9 @@ APP_ID = "1089"
 
 SYMBOL = "R_50"
 
-# =========================================
+# ======================================
 # UPDATE WIN RATE
-# =========================================
+# ======================================
 
 def update_win_rate():
 
@@ -67,9 +67,9 @@ def update_win_rate():
             2
         )
 
-# =========================================
+# ======================================
 # SIMULATED TRADE
-# =========================================
+# ======================================
 
 def simulate_trade(signal_name):
 
@@ -82,14 +82,10 @@ def simulate_trade(signal_name):
 
     time.sleep(2)
 
-    # =====================================
-    # SMARTER OUTCOME SIMULATION
-    # =====================================
-
-    result = random.choices(
-        ["WIN", "LOSS"],
-        weights=[62, 38]
-    )[0]
+    result = random.choice([
+        "WIN",
+        "LOSS"
+    ])
 
     if result == "WIN":
 
@@ -109,9 +105,9 @@ def simulate_trade(signal_name):
 
     active_trade = "NONE"
 
-# =========================================
-# V4 REAL FILTER ENGINE
-# =========================================
+# ======================================
+# DERIV ENGINE
+# ======================================
 
 def deriv_engine():
 
@@ -120,11 +116,6 @@ def deriv_engine():
     global signal
     global last_digit
     global tick_price
-    global active_trade
-
-    digits_buffer = deque(maxlen=25)
-
-    cooldown = 0
 
     try:
 
@@ -147,7 +138,7 @@ def deriv_engine():
 
         status = "CONNECTED TO DERIV"
 
-        # SUBSCRIBE TICKS
+        # SUBSCRIBE
         ws.send(json.dumps({
             "ticks": SYMBOL,
             "subscribe": 1
@@ -163,70 +154,20 @@ def deriv_engine():
 
                 tick_price = str(price)
 
+                # SAFE LAST DIGIT
                 price_str = f"{price:.2f}"
 
-digit = int(price_str[-1])
+                digit = int(price_str[-1])
 
                 last_digit = digit
 
-                digits_buffer.append(digit)
+                # RANDOM TEST CONFIDENCE
+                confidence = random.randint(25, 90)
 
-                # =================================
-                # WAIT FOR DATA
-                # =================================
+                # SIGNAL
+                if confidence >= 60:
 
-                if len(digits_buffer) < 15:
-
-                    signal = "COLLECTING DATA..."
-
-                    continue
-
-                # =================================
-                # COOLDOWN
-                # =================================
-
-                if cooldown > 0:
-
-                    cooldown -= 1
-
-                    signal = "COOLDOWN"
-
-                    confidence = 0
-
-                    continue
-
-                recent = list(digits_buffer)[-6:]
-
-                last = recent[-1]
-
-                repeat_count = recent.count(last)
-
-                # =================================
-                # DIGIT ANALYSIS
-                # =================================
-
-                counter = Counter(recent)
-
-                most_common = counter.most_common(1)[0][0]
-
-                frequency = counter.most_common(1)[0][1]
-
-                # =================================
-                # EXHAUSTION LOGIC
-                # =================================
-
-                if frequency >= 4:
-
-                    confidence = min(
-                        55 + (frequency * 5),
-                        90
-                    )
-
-                    signal = f"DIFFER {most_common}"
-
-                    # =============================
-                    # EXECUTION
-                    # =============================
+                    signal = f"DIFFER {random.randint(0,9)}"
 
                     if (
                         bot_running
@@ -239,44 +180,28 @@ digit = int(price_str[-1])
                             daemon=True
                         ).start()
 
-                        cooldown = 8
-
                 else:
-
-                    confidence = 15
 
                     signal = "WAITING..."
 
-                # =================================
-                # VOLATILITY BLOCK
-                # =================================
-
-                if repeat_count >= 5:
-
-                    signal = "VOLATILE MARKET"
-
-                    confidence = 5
-
-                    cooldown = 12
-
-                time.sleep(0.3)
+                time.sleep(0.2)
 
     except Exception as e:
 
         status = f"ERROR: {e}"
 
-# =========================================
+# ======================================
 # START ENGINE
-# =========================================
+# ======================================
 
 threading.Thread(
     target=deriv_engine,
     daemon=True
 ).start()
 
-# =========================================
+# ======================================
 # START BOT
-# =========================================
+# ======================================
 
 @app.get("/start")
 def start_bot():
@@ -290,9 +215,9 @@ def start_bot():
         status_code=303
     )
 
-# =========================================
+# ======================================
 # STOP BOT
-# =========================================
+# ======================================
 
 @app.get("/stop")
 def stop_bot():
@@ -302,4 +227,189 @@ def stop_bot():
     bot_running = False
 
     return RedirectResponse(
-        url="/
+        url="/",
+        status_code=303
+    )
+
+# ======================================
+# DASHBOARD
+# ======================================
+
+@app.get("/", response_class=HTMLResponse)
+def dashboard():
+
+    history_html = ""
+
+    for item in trade_history:
+
+        history_html += f"<p>{item}</p>"
+
+    return f"""
+
+    <html>
+
+    <head>
+
+        <title>DIGIT DIFFER ENGINE</title>
+
+        <meta http-equiv="refresh" content="2">
+
+        <style>
+
+            body {{
+
+                background:#0f172a;
+                color:white;
+                font-family:Arial;
+                text-align:center;
+                padding:20px;
+
+            }}
+
+            .card {{
+
+                background:#1e293b;
+                padding:20px;
+                margin:20px;
+                border-radius:12px;
+
+            }}
+
+            button {{
+
+                padding:12px 25px;
+                border:none;
+                border-radius:10px;
+                color:white;
+                font-size:16px;
+                margin:10px;
+                cursor:pointer;
+
+            }}
+
+        </style>
+
+    </head>
+
+    <body>
+
+        <h1>DIGIT DIFFER ENGINE</h1>
+
+        <div class="card">
+
+            <h3>Status</h3>
+
+            <p>{status}</p>
+
+            <p>
+            Bot Running: {bot_running}
+            </p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Market</h3>
+
+            <p>Tick: {tick_price}</p>
+
+            <p>Last Digit: {last_digit}</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Signal Engine</h3>
+
+            <p>{signal}</p>
+
+            <p>
+            Confidence: {confidence}%
+            </p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Simulation</h3>
+
+            <p>
+            Active Trade: {active_trade}
+            </p>
+
+            <p>
+            Last Result: {last_result}
+            </p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Performance</h3>
+
+            <p>Wins: {wins}</p>
+
+            <p>Losses: {losses}</p>
+
+            <p>Win Rate: {win_rate}%</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Trade History</h3>
+
+            {history_html}
+
+        </div>
+
+        <div class="card">
+
+            <h3>Controls</h3>
+
+            <form action="/start" method="get">
+
+                <button
+                    type="submit"
+                    style="background:green;">
+
+                    START BOT
+
+                </button>
+
+            </form>
+
+            <form action="/stop" method="get">
+
+                <button
+                    type="submit"
+                    style="background:red;">
+
+                    STOP BOT
+
+                </button>
+
+            </form>
+
+        </div>
+
+    </body>
+
+    </html>
+    """
+
+# ======================================
+# RUN SERVER
+# ======================================
+
+if __name__ == "__main__":
+
+    port = int(
+        os.environ.get("PORT", 8000)
+    )
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port
+)
