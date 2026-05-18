@@ -434,4 +434,186 @@ def dashboard():
 
         </style>
 
-    </
+    </head>
+
+    <body>
+
+        <h1>DIGIT DIFFER ENGINE V6</h1>
+
+        <h2>
+        THE VENTURED KINGS LTD — EVANS MUKUKA
+        </h2>
+
+        <div class="card">
+
+            <h3>Status</h3>
+
+            <p>{status}</p>
+
+            <p>Bot Running: {bot_running}</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Market</h3>
+
+            <p>Tick: {tick_price}</p>
+
+            <p>Last Digit: {last_digit}</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Signal Engine</h3>
+
+            <p>{signal}</p>
+
+            <p>Confidence: {confidence}%</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Money Management</h3>
+
+            <p>Balance: ${round(balance,2)}</p>
+
+            <p>Profit/Loss: ${round(profit,2)}</p>
+
+            <p>Current Stake: ${current_stake}</p>
+
+            <p>Loss Streak: {loss_streak}</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Professional Controls</h3>
+
+            <form action="/settings" method="post">
+
+                <p>Stake</p>
+
+                <input
+                    type="number"
+                    step="0.01"
+                    name="stake"
+                    value="{base_stake}">
+
+                <p>Martingale</p>
+
+                <input
+                    type="number"
+                    step="0.1"
+                    name="martingale"
+                    value="{martingale_multiplier}">
+
+                <p>Take Profit</p>
+
+                <input
+                    type="number"
+                    step="0.1"
+                    name="tp"
+                    value="{take_profit}">
+
+                <p>Stop Loss</p>
+
+                <input
+                    type="number"
+                    step="0.1"
+                    name="sl"
+                    value="{stop_loss}">
+
+                <p>Confidence Threshold</p>
+
+                <input
+                    type="number"
+                    name="confidence_input"
+                    value="{confidence_threshold}">
+
+                <br><br>
+
+                <button
+                    type="submit"
+                    style="background:blue;">
+
+                    SAVE SETTINGS
+
+                </button>
+
+            </form>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Performance</h3>
+
+            <p>Wins: {wins}</p>
+
+            <p>Losses: {losses}</p>
+
+            <p>Win Rate: {win_rate}%</p>
+
+        </div>
+
+        <div class="card">
+
+            <h3>Trade History</h3>
+
+            {history_html}
+
+        </div>
+
+        <div class="card">
+
+            <h3>Controls</h3>
+
+            <form action="/start" method="get">
+
+                <button
+                    type="submit"
+                    style="background:green;">
+
+                    START BOT
+
+                </button>
+
+            </form>
+
+            <form action="/stop" method="get">
+
+                <button
+                    type="submit"
+                    style="background:red;">
+
+                    STOP BOT
+
+                </button>
+
+            </form>
+
+        </div>
+
+    </body>
+
+    </html>
+    """
+
+# ======================================
+# RUN SERVER
+# ======================================
+
+if __name__ == "__main__":
+
+    port = int(
+        os.environ.get("PORT", 8000)
+    )
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=port
+)
