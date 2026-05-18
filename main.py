@@ -117,9 +117,23 @@ def check_limits():
 
         bot_running = False
 
+        status_message("TAKE PROFIT HIT")
+
     if profit <= -stop_loss:
 
         bot_running = False
+
+        status_message("STOP LOSS HIT")
+
+# ======================================
+# STATUS HELPER
+# ======================================
+
+def status_message(msg):
+
+    global status
+
+    status = msg
 
 # ======================================
 # SIMULATED TRADE
@@ -142,12 +156,12 @@ def simulate_trade(signal_name):
     time.sleep(2)
 
     # ==================================
-    # SMART SIMULATION
+    # SMARTER SIMULATION
     # ==================================
 
     result = random.choices(
         ["WIN", "LOSS"],
-        weights=[58, 42]
+        weights=[60, 40]
     )[0]
 
     # ==================================
@@ -197,13 +211,13 @@ def simulate_trade(signal_name):
     last_result = result
 
     trade_history.appendleft(
-        f"{signal_name} | {result} | Stake: ${current_stake}"
+        f"{signal_name} | {result} | Stake ${current_stake}"
     )
 
     active_trade = "NONE"
 
 # ======================================
-# DERIV ENGINE
+# V7 REAL SIGNAL ENGINE
 # ======================================
 
 def deriv_engine():
@@ -213,6 +227,8 @@ def deriv_engine():
     global signal
     global last_digit
     global tick_price
+
+    recent_digits = []
 
     try:
 
@@ -255,26 +271,113 @@ def deriv_engine():
 
                 last_digit = digit
 
-                confidence = random.randint(25, 90)
+                # ==============================
+                # STORE RECENT DIGITS
+                # ==============================
 
-                if confidence >= confidence_threshold:
+                recent_digits.append(digit)
 
-                    signal = f"DIFFER {random.randint(0,9)}"
+                if len(recent_digits) > 12:
 
-                    if (
-                        bot_running
-                        and active_trade == "NONE"
-                    ):
+                    recent_digits.pop(0)
 
-                        threading.Thread(
-                            target=simulate_trade,
-                            args=(signal,),
-                            daemon=True
-                        ).start()
+                # ==============================
+                # WAIT FOR DATA
+                # ==============================
+
+                if len(recent_digits) < 8:
+
+                    signal = "COLLECTING DATA..."
+
+                    confidence = 0
+
+                    continue
+
+                # ==============================
+                # DIGIT ANALYSIS
+                # ==============================
+
+                digit_counts = {}
+
+                for d in recent_digits:
+
+                    digit_counts[d] = (
+                        digit_counts.get(d, 0) + 1
+                    )
+
+                most_common_digit = max(
+                    digit_counts,
+                    key=digit_counts.get
+                )
+
+                frequency = digit_counts[
+                    most_common_digit
+                ]
+
+                # ==============================
+                # STRONG PRESSURE
+                # ==============================
+
+                if frequency >= 4:
+
+                    confidence = min(
+                        50 + (frequency * 8),
+                        95
+                    )
+
+                    signal = (
+                        f"DIFFER {most_common_digit}"
+                    )
+
+                # ==============================
+                # MODERATE PRESSURE
+                # ==============================
+
+                elif frequency == 3:
+
+                    confidence = 55
+
+                    signal = "MODERATE SETUP"
+
+                # ==============================
+                # WEAK MARKET
+                # ==============================
 
                 else:
 
+                    confidence = 20
+
                     signal = "WAITING..."
+
+                # ==============================
+                # VOLATILITY FILTER
+                # ==============================
+
+                same_count = recent_digits.count(
+                    recent_digits[-1]
+                )
+
+                if same_count >= 5:
+
+                    confidence = 5
+
+                    signal = "VOLATILE MARKET"
+
+                # ==============================
+                # EXECUTION
+                # ==============================
+
+                if (
+                    confidence >= confidence_threshold
+                    and bot_running
+                    and active_trade == "NONE"
+                ):
+
+                    threading.Thread(
+                        target=simulate_trade,
+                        args=(signal,),
+                        daemon=True
+                    ).start()
 
                 time.sleep(0.2)
 
@@ -302,6 +405,8 @@ def start_bot():
 
     bot_running = True
 
+    status_message("BOT STARTED")
+
     return RedirectResponse(
         url="/",
         status_code=303
@@ -317,6 +422,8 @@ def stop_bot():
     global bot_running
 
     bot_running = False
+
+    status_message("BOT STOPPED")
 
     return RedirectResponse(
         url="/",
@@ -361,6 +468,8 @@ def update_settings(
 
     confidence_threshold = confidence_input
 
+    status_message("SETTINGS UPDATED")
+
     return RedirectResponse(
         url="/",
         status_code=303
@@ -385,7 +494,7 @@ def dashboard():
 
     <head>
 
-        <title>DIGIT DIFFER ENGINE V6</title>
+        <title>DIGIT DIFFER ENGINE V7</title>
 
         <meta http-equiv="refresh" content="2">
 
@@ -413,9 +522,9 @@ def dashboard():
             input {{
 
                 padding:10px;
-                width:200px;
-                border-radius:8px;
+                width:220px;
                 border:none;
+                border-radius:8px;
                 margin:5px;
 
             }}
@@ -438,7 +547,7 @@ def dashboard():
 
     <body>
 
-        <h1>DIGIT DIFFER ENGINE V6</h1>
+        <h1>DIGIT DIFFER ENGINE V7</h1>
 
         <h2>
         THE VENTURED KINGS LTD — EVANS MUKUKA
@@ -616,4 +725,4 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port
-)
+        )
