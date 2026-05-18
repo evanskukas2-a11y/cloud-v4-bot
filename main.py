@@ -66,17 +66,19 @@ loss_streak = 0
 # PROFESSIONAL SETTINGS
 # ======================================
 
-confidence_threshold = 60
+confidence_threshold = 70
 
 max_loss_streak = 5
 
-trade_cooldown = 2
+trade_cooldown = 5
 
 mode = "SAFE"
 
 strategy = "DIGIT DIFFER"
 
 simulation_mode = True
+
+last_trade_time = 0
 
 # ======================================
 # CONFIG
@@ -106,26 +108,6 @@ def update_win_rate():
         )
 
 # ======================================
-# CHECK TP / SL
-# ======================================
-
-def check_limits():
-
-    global bot_running
-
-    if profit >= take_profit:
-
-        bot_running = False
-
-        status_message("TAKE PROFIT HIT")
-
-    if profit <= -stop_loss:
-
-        bot_running = False
-
-        status_message("STOP LOSS HIT")
-
-# ======================================
 # STATUS HELPER
 # ======================================
 
@@ -134,6 +116,41 @@ def status_message(msg):
     global status
 
     status = msg
+
+# ======================================
+# CHECK TP / SL
+# ======================================
+
+def check_limits():
+
+    global bot_running
+
+    # TAKE PROFIT
+    if profit >= take_profit:
+
+        bot_running = False
+
+        status_message(
+            "TAKE PROFIT HIT"
+        )
+
+    # STOP LOSS
+    if profit <= -stop_loss:
+
+        bot_running = False
+
+        status_message(
+            "STOP LOSS HIT"
+        )
+
+    # LOSS STREAK PROTECTION
+    if loss_streak >= max_loss_streak:
+
+        bot_running = False
+
+        status_message(
+            "MAX LOSS STREAK HIT"
+        )
 
 # ======================================
 # SIMULATED TRADE
@@ -159,9 +176,21 @@ def simulate_trade(signal_name):
     # SMARTER SIMULATION
     # ==================================
 
+    if confidence >= 85:
+
+        weights = [72, 28]
+
+    elif confidence >= 75:
+
+        weights = [65, 35]
+
+    else:
+
+        weights = [55, 45]
+
     result = random.choices(
         ["WIN", "LOSS"],
-        weights=[60, 40]
+        weights=weights
     )[0]
 
     # ==================================
@@ -217,7 +246,7 @@ def simulate_trade(signal_name):
     active_trade = "NONE"
 
 # ======================================
-# V7 REAL SIGNAL ENGINE
+# V8 SIGNAL ENGINE
 # ======================================
 
 def deriv_engine():
@@ -227,6 +256,7 @@ def deriv_engine():
     global signal
     global last_digit
     global tick_price
+    global last_trade_time
 
     recent_digits = []
 
@@ -272,12 +302,12 @@ def deriv_engine():
                 last_digit = digit
 
                 # ==============================
-                # STORE RECENT DIGITS
+                # STORE DIGITS
                 # ==============================
 
                 recent_digits.append(digit)
 
-                if len(recent_digits) > 12:
+                if len(recent_digits) > 15:
 
                     recent_digits.pop(0)
 
@@ -285,7 +315,7 @@ def deriv_engine():
                 # WAIT FOR DATA
                 # ==============================
 
-                if len(recent_digits) < 8:
+                if len(recent_digits) < 10:
 
                     signal = "COLLECTING DATA..."
 
@@ -318,10 +348,10 @@ def deriv_engine():
                 # STRONG PRESSURE
                 # ==============================
 
-                if frequency >= 4:
+                if frequency >= 5:
 
                     confidence = min(
-                        50 + (frequency * 8),
+                        60 + (frequency * 7),
                         95
                     )
 
@@ -330,14 +360,16 @@ def deriv_engine():
                     )
 
                 # ==============================
-                # MODERATE PRESSURE
+                # MEDIUM PRESSURE
                 # ==============================
 
-                elif frequency == 3:
+                elif frequency == 4:
 
-                    confidence = 55
+                    confidence = 72
 
-                    signal = "MODERATE SETUP"
+                    signal = (
+                        "MODERATE PRESSURE"
+                    )
 
                 # ==============================
                 # WEAK MARKET
@@ -345,7 +377,7 @@ def deriv_engine():
 
                 else:
 
-                    confidence = 20
+                    confidence = 25
 
                     signal = "WAITING..."
 
@@ -357,21 +389,46 @@ def deriv_engine():
                     recent_digits[-1]
                 )
 
-                if same_count >= 5:
+                if same_count >= 6:
 
                     confidence = 5
 
-                    signal = "VOLATILE MARKET"
+                    signal = (
+                        "VOLATILE MARKET"
+                    )
+
+                # ==============================
+                # COOLDOWN FILTER
+                # ==============================
+
+                seconds_since_trade = (
+                    time.time()
+                    - last_trade_time
+                )
+
+                if (
+                    seconds_since_trade
+                    < trade_cooldown
+                ):
+
+                    signal = (
+                        "TRADE COOLDOWN"
+                    )
 
                 # ==============================
                 # EXECUTION
                 # ==============================
 
                 if (
-                    confidence >= confidence_threshold
+                    confidence
+                    >= confidence_threshold
                     and bot_running
                     and active_trade == "NONE"
+                    and seconds_since_trade
+                    >= trade_cooldown
                 ):
+
+                    last_trade_time = time.time()
 
                     threading.Thread(
                         target=simulate_trade,
@@ -405,7 +462,9 @@ def start_bot():
 
     bot_running = True
 
-    status_message("BOT STARTED")
+    status_message(
+        "BOT STARTED"
+    )
 
     return RedirectResponse(
         url="/",
@@ -423,7 +482,9 @@ def stop_bot():
 
     bot_running = False
 
-    status_message("BOT STOPPED")
+    status_message(
+        "BOT STOPPED"
+    )
 
     return RedirectResponse(
         url="/",
@@ -468,7 +529,9 @@ def update_settings(
 
     confidence_threshold = confidence_input
 
-    status_message("SETTINGS UPDATED")
+    status_message(
+        "SETTINGS UPDATED"
+    )
 
     return RedirectResponse(
         url="/",
@@ -494,7 +557,7 @@ def dashboard():
 
     <head>
 
-        <title>DIGIT DIFFER ENGINE V7</title>
+        <title>DIGIT DIFFER ENGINE V8</title>
 
         <meta http-equiv="refresh" content="2">
 
@@ -547,7 +610,7 @@ def dashboard():
 
     <body>
 
-        <h1>DIGIT DIFFER ENGINE V7</h1>
+        <h1>DIGIT DIFFER ENGINE V8</h1>
 
         <h2>
         THE VENTURED KINGS LTD — EVANS MUKUKA
@@ -559,7 +622,9 @@ def dashboard():
 
             <p>{status}</p>
 
-            <p>Bot Running: {bot_running}</p>
+            <p>
+            Bot Running: {bot_running}
+            </p>
 
         </div>
 
@@ -579,7 +644,9 @@ def dashboard():
 
             <p>{signal}</p>
 
-            <p>Confidence: {confidence}%</p>
+            <p>
+            Confidence: {confidence}%
+            </p>
 
         </div>
 
@@ -587,13 +654,21 @@ def dashboard():
 
             <h3>Money Management</h3>
 
-            <p>Balance: ${round(balance,2)}</p>
+            <p>
+            Balance: ${round(balance,2)}
+            </p>
 
-            <p>Profit/Loss: ${round(profit,2)}</p>
+            <p>
+            Profit/Loss: ${round(profit,2)}
+            </p>
 
-            <p>Current Stake: ${current_stake}</p>
+            <p>
+            Current Stake: ${current_stake}
+            </p>
 
-            <p>Loss Streak: {loss_streak}</p>
+            <p>
+            Loss Streak: {loss_streak}
+            </p>
 
         </div>
 
@@ -725,4 +800,4 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=port
-        )
+)
