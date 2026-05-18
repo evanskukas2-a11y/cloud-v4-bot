@@ -457,7 +457,12 @@ def deriv_engine():
 
     time.sleep(5)
 
-    deriv_engine()
+    threading.Thread(
+        target=deriv_engine,
+        daemon=True
+    ).start()
+
+    return
 
 # ======================================
 # START ENGINE
