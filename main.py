@@ -72,10 +72,6 @@ max_loss_streak = 5
 
 trade_cooldown = 5
 
-mode = "SAFE"
-
-strategy = "DIGIT DIFFER"
-
 simulation_mode = True
 
 last_trade_time = 0
@@ -118,7 +114,7 @@ def status_message(msg):
     status = msg
 
 # ======================================
-# CHECK TP / SL
+# CHECK LIMITS
 # ======================================
 
 def check_limits():
@@ -202,7 +198,6 @@ def simulate_trade(signal_name):
     global losses
     global active_trade
     global last_result
-
     global balance
     global current_stake
     global profit
@@ -211,10 +206,6 @@ def simulate_trade(signal_name):
     active_trade = signal_name
 
     time.sleep(2)
-
-    # ==================================
-    # SMARTER SIMULATION
-    # ==================================
 
     if confidence >= 85:
 
@@ -233,9 +224,9 @@ def simulate_trade(signal_name):
         weights=weights
     )[0]
 
-    # ==================================
+    # ==========================
     # WIN
-    # ==================================
+    # ==========================
 
     if result == "WIN":
 
@@ -254,9 +245,9 @@ def simulate_trade(signal_name):
 
         loss_streak = 0
 
-    # ==================================
+    # ==========================
     # LOSS
-    # ==================================
+    # ==========================
 
     else:
 
@@ -286,7 +277,7 @@ def simulate_trade(signal_name):
     active_trade = "NONE"
 
 # ======================================
-# V8 SIGNAL ENGINE
+# ENGINE
 # ======================================
 
 def deriv_engine():
@@ -341,19 +332,11 @@ def deriv_engine():
 
                 last_digit = digit
 
-                # ==============================
-                # STORE DIGITS
-                # ==============================
-
                 recent_digits.append(digit)
 
                 if len(recent_digits) > 15:
 
                     recent_digits.pop(0)
-
-                # ==============================
-                # WAIT FOR DATA
-                # ==============================
 
                 if len(recent_digits) < 10:
 
@@ -363,9 +346,9 @@ def deriv_engine():
 
                     continue
 
-                # ==============================
-                # DIGIT ANALYSIS
-                # ==============================
+                # ==========================
+                # ANALYSIS
+                # ==========================
 
                 digit_counts = {}
 
@@ -384,10 +367,6 @@ def deriv_engine():
                     most_common_digit
                 ]
 
-                # ==============================
-                # STRONG PRESSURE
-                # ==============================
-
                 if frequency >= 5:
 
                     confidence = min(
@@ -399,10 +378,6 @@ def deriv_engine():
                         f"DIFFER {most_common_digit}"
                     )
 
-                # ==============================
-                # MEDIUM PRESSURE
-                # ==============================
-
                 elif frequency == 4:
 
                     confidence = 72
@@ -411,19 +386,15 @@ def deriv_engine():
                         "MODERATE PRESSURE"
                     )
 
-                # ==============================
-                # WEAK MARKET
-                # ==============================
-
                 else:
 
                     confidence = 25
 
                     signal = "WAITING..."
 
-                # ==============================
+                # ==========================
                 # VOLATILITY FILTER
-                # ==============================
+                # ==========================
 
                 same_count = recent_digits.count(
                     recent_digits[-1]
@@ -437,9 +408,9 @@ def deriv_engine():
                         "VOLATILE MARKET"
                     )
 
-                # ==============================
-                # COOLDOWN FILTER
-                # ==============================
+                # ==========================
+                # COOLDOWN
+                # ==========================
 
                 seconds_since_trade = (
                     time.time()
@@ -455,9 +426,9 @@ def deriv_engine():
                         "TRADE COOLDOWN"
                     )
 
-                # ==============================
+                # ==========================
                 # EXECUTION
-                # ==============================
+                # ==========================
 
                 if (
                     confidence
@@ -532,7 +503,7 @@ def stop_bot():
     )
 
 # ======================================
-# UPDATE SETTINGS
+# SETTINGS
 # ======================================
 
 @app.post("/settings")
@@ -599,7 +570,7 @@ def dashboard():
 
         <title>DIGIT DIFFER ENGINE V8</title>
 
-        
+        <meta http-equiv="refresh" content="30">
 
         <style>
 
