@@ -599,7 +599,7 @@ def dashboard():
 
         <title>DIGIT DIFFER ENGINE V8</title>
 
-        <meta http-equiv="refresh" content="10">
+        
 
         <style>
 
