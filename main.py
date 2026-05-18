@@ -451,7 +451,13 @@ def deriv_engine():
 
     except Exception as e:
 
-        status = f"ERROR: {e}"
+    status = (
+        f"RECONNECTING... {e}"
+    )
+
+    time.sleep(5)
+
+    deriv_engine()
 
 # ======================================
 # START ENGINE
