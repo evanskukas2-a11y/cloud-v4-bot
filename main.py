@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 import uvicorn
 import websocket
@@ -61,6 +61,22 @@ stop_loss = 10
 profit = 0
 
 loss_streak = 0
+
+# ======================================
+# PROFESSIONAL SETTINGS
+# ======================================
+
+confidence_threshold = 60
+
+max_loss_streak = 5
+
+trade_cooldown = 2
+
+mode = "SAFE"
+
+strategy = "DIGIT DIFFER"
+
+simulation_mode = True
 
 # ======================================
 # CONFIG
@@ -126,7 +142,7 @@ def simulate_trade(signal_name):
     time.sleep(2)
 
     # ==================================
-    # SIMULATION OUTCOME
+    # SMART SIMULATION
     # ==================================
 
     result = random.choices(
@@ -241,7 +257,7 @@ def deriv_engine():
 
                 confidence = random.randint(25, 90)
 
-                if confidence >= 60:
+                if confidence >= confidence_threshold:
 
                     signal = f"DIFFER {random.randint(0,9)}"
 
@@ -308,6 +324,49 @@ def stop_bot():
     )
 
 # ======================================
+# UPDATE SETTINGS
+# ======================================
+
+@app.post("/settings")
+def update_settings(
+
+    stake: float = Form(...),
+
+    martingale: float = Form(...),
+
+    tp: float = Form(...),
+
+    sl: float = Form(...),
+
+    confidence_input: int = Form(...)
+
+):
+
+    global base_stake
+    global current_stake
+    global martingale_multiplier
+    global take_profit
+    global stop_loss
+    global confidence_threshold
+
+    base_stake = stake
+
+    current_stake = stake
+
+    martingale_multiplier = martingale
+
+    take_profit = tp
+
+    stop_loss = sl
+
+    confidence_threshold = confidence_input
+
+    return RedirectResponse(
+        url="/",
+        status_code=303
+    )
+
+# ======================================
 # DASHBOARD
 # ======================================
 
@@ -326,7 +385,7 @@ def dashboard():
 
     <head>
 
-        <title>DIGIT DIFFER ENGINE V5</title>
+        <title>DIGIT DIFFER ENGINE V6</title>
 
         <meta http-equiv="refresh" content="2">
 
@@ -351,6 +410,16 @@ def dashboard():
 
             }}
 
+            input {{
+
+                padding:10px;
+                width:200px;
+                border-radius:8px;
+                border:none;
+                margin:5px;
+
+            }}
+
             button {{
 
                 padding:12px 25px;
@@ -365,141 +434,4 @@ def dashboard():
 
         </style>
 
-    </head>
-
-    <body>
-
-        <h1>DIGIT DIFFER ENGINE V5</h1>
-
-        <h2>
-        THE VENTURED KINGS LTD — EVANS MUKUKA
-        </h2>
-
-        <div class="card">
-
-            <h3>Status</h3>
-
-            <p>{status}</p>
-
-            <p>Bot Running: {bot_running}</p>
-
-        </div>
-
-        <div class="card">
-
-            <h3>Market</h3>
-
-            <p>Tick: {tick_price}</p>
-
-            <p>Last Digit: {last_digit}</p>
-
-        </div>
-
-        <div class="card">
-
-            <h3>Signal Engine</h3>
-
-            <p>{signal}</p>
-
-            <p>Confidence: {confidence}%</p>
-
-        </div>
-
-        <div class="card">
-
-            <h3>Money Management</h3>
-
-            <p>Balance: ${round(balance,2)}</p>
-
-            <p>Profit/Loss: ${round(profit,2)}</p>
-
-            <p>Current Stake: ${current_stake}</p>
-
-            <p>Loss Streak: {loss_streak}</p>
-
-        </div>
-
-        <div class="card">
-
-            <h3>Settings</h3>
-
-            <p>Base Stake: ${base_stake}</p>
-
-            <p>Martingale: x{martingale_multiplier}</p>
-
-            <p>Take Profit: ${take_profit}</p>
-
-            <p>Stop Loss: ${stop_loss}</p>
-
-        </div>
-
-        <div class="card">
-
-            <h3>Performance</h3>
-
-            <p>Wins: {wins}</p>
-
-            <p>Losses: {losses}</p>
-
-            <p>Win Rate: {win_rate}%</p>
-
-        </div>
-
-        <div class="card">
-
-            <h3>Trade History</h3>
-
-            {history_html}
-
-        </div>
-
-        <div class="card">
-
-            <h3>Controls</h3>
-
-            <form action="/start" method="get">
-
-                <button
-                    type="submit"
-                    style="background:green;">
-
-                    START BOT
-
-                </button>
-
-            </form>
-
-            <form action="/stop" method="get">
-
-                <button
-                    type="submit"
-                    style="background:red;">
-
-                    STOP BOT
-
-                </button>
-
-            </form>
-
-        </div>
-
-    </body>
-
-    </html>
-    """
-
-# ======================================
-# RUN SERVER
-# ======================================
-
-if __name__ == "__main__":
-
-    port = int(
-        os.environ.get("PORT", 8000)
-    )
-
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=port
-)
+    </
