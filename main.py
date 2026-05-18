@@ -63,7 +63,7 @@ profit = 0
 loss_streak = 0
 
 # ======================================
-# PROFESSIONAL SETTINGS
+# SETTINGS
 # ======================================
 
 confidence_threshold = 70
@@ -71,8 +71,6 @@ confidence_threshold = 70
 max_loss_streak = 5
 
 trade_cooldown = 5
-
-simulation_mode = True
 
 last_trade_time = 0
 
@@ -87,7 +85,7 @@ APP_ID = "1089"
 SYMBOL = "R_50"
 
 # ======================================
-# UPDATE WIN RATE
+# HELPERS
 # ======================================
 
 def update_win_rate():
@@ -102,10 +100,6 @@ def update_win_rate():
             (wins / total) * 100,
             2
         )
-
-# ======================================
-# STATUS HELPER
-# ======================================
 
 def status_message(msg):
 
@@ -189,7 +183,7 @@ def reset_session():
     )
 
 # ======================================
-# SIMULATED TRADE
+# TRADE SIMULATION
 # ======================================
 
 def simulate_trade(signal_name):
@@ -277,7 +271,7 @@ def simulate_trade(signal_name):
     active_trade = "NONE"
 
 # ======================================
-# ENGINE
+# DERIV ENGINE
 # ======================================
 
 def deriv_engine():
@@ -291,187 +285,179 @@ def deriv_engine():
 
     recent_digits = []
 
-    try:
+    while True:
 
-        ws = websocket.create_connection(
-            f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
-        )
+        try:
 
-        ws.send(json.dumps({
-            "authorize": TOKEN
-        }))
+            ws = websocket.create_connection(
+                f"wss://ws.derivws.com/websockets/v3?app_id={APP_ID}"
+            )
 
-        auth = json.loads(ws.recv())
+            ws.send(json.dumps({
+                "authorize": TOKEN
+            }))
 
-        if "error" in auth:
+            auth = json.loads(ws.recv())
 
-            status = "AUTH FAILED"
+            if "error" in auth:
 
-            return
+                status = "AUTH FAILED"
 
-        status = "CONNECTED TO DERIV"
+                time.sleep(5)
 
-        ws.send(json.dumps({
-            "ticks": SYMBOL,
-            "subscribe": 1
-        }))
+                continue
 
-        while True:
+            status = "CONNECTED TO DERIV"
 
-            data = json.loads(ws.recv())
+            ws.send(json.dumps({
+                "ticks": SYMBOL,
+                "subscribe": 1
+            }))
 
-            if "tick" in data:
+            while True:
 
-                price = data["tick"]["quote"]
+                data = json.loads(ws.recv())
 
-                tick_price = str(price)
+                if "tick" in data:
 
-                price_str = f"{price:.2f}"
+                    price = data["tick"]["quote"]
 
-                digit = int(price_str[-1])
+                    tick_price = str(price)
 
-                last_digit = digit
+                    price_str = f"{price:.2f}"
 
-                recent_digits.append(digit)
+                    digit = int(price_str[-1])
 
-                if len(recent_digits) > 15:
+                    last_digit = digit
 
-                    recent_digits.pop(0)
+                    recent_digits.append(digit)
 
-                if len(recent_digits) < 10:
+                    if len(recent_digits) > 15:
 
-                    signal = "COLLECTING DATA..."
+                        recent_digits.pop(0)
 
-                    confidence = 0
+                    if len(recent_digits) < 10:
 
-                    continue
+                        signal = "COLLECTING DATA..."
 
-                # ==========================
-                # ANALYSIS
-                # ==========================
+                        confidence = 0
 
-                digit_counts = {}
+                        continue
 
-                for d in recent_digits:
+                    # ==========================
+                    # ANALYSIS
+                    # ==========================
 
-                    digit_counts[d] = (
-                        digit_counts.get(d, 0) + 1
+                    digit_counts = {}
+
+                    for d in recent_digits:
+
+                        digit_counts[d] = (
+                            digit_counts.get(d, 0) + 1
+                        )
+
+                    most_common_digit = max(
+                        digit_counts,
+                        key=digit_counts.get
                     )
 
-                most_common_digit = max(
-                    digit_counts,
-                    key=digit_counts.get
-                )
+                    frequency = digit_counts[
+                        most_common_digit
+                    ]
 
-                frequency = digit_counts[
-                    most_common_digit
-                ]
+                    # ==========================
+                    # SIGNALS
+                    # ==========================
 
-                if frequency >= 5:
+                    if frequency >= 5:
 
-                    confidence = min(
-                        60 + (frequency * 7),
-                        95
+                        confidence = min(
+                            60 + (frequency * 7),
+                            95
+                        )
+
+                        signal = (
+                            f"DIFFER {most_common_digit}"
+                        )
+
+                    elif frequency == 4:
+
+                        confidence = 72
+
+                        signal = (
+                            "MODERATE PRESSURE"
+                        )
+
+                    else:
+
+                        confidence = 25
+
+                        signal = "WAITING..."
+
+                    # ==========================
+                    # VOLATILITY FILTER
+                    # ==========================
+
+                    same_count = recent_digits.count(
+                        recent_digits[-1]
                     )
 
-                    signal = (
-                        f"DIFFER {most_common_digit}"
+                    if same_count >= 6:
+
+                        confidence = 5
+
+                        signal = (
+                            "VOLATILE MARKET"
+                        )
+
+                    # ==========================
+                    # COOLDOWN
+                    # ==========================
+
+                    seconds_since_trade = (
+                        time.time()
+                        - last_trade_time
                     )
 
-                elif frequency == 4:
+                    if (
+                        seconds_since_trade
+                        < trade_cooldown
+                    ):
 
-                    confidence = 72
+                        signal = (
+                            "TRADE COOLDOWN"
+                        )
 
-                    signal = (
-                        "MODERATE PRESSURE"
-                    )
+                    # ==========================
+                    # EXECUTION
+                    # ==========================
 
-                else:
+                    if (
+                        confidence
+                        >= confidence_threshold
+                        and bot_running
+                        and active_trade == "NONE"
+                        and seconds_since_trade
+                        >= trade_cooldown
+                    ):
 
-                    confidence = 25
+                        last_trade_time = time.time()
 
-                    signal = "WAITING..."
+                        threading.Thread(
+                            target=simulate_trade,
+                            args=(signal,),
+                            daemon=True
+                        ).start()
 
-                # ==========================
-                # VOLATILITY FILTER
-                # ==========================
+                    time.sleep(0.2)
 
-                same_count = recent_digits.count(
-                    recent_digits[-1]
-                )
+        except Exception as e:
 
-                if same_count >= 6:
+            status = (
+                f"RECONNECTING... {e}"
+            )
 
-                    confidence = 5
-
-                    signal = (
-                        "VOLATILE MARKET"
-                    )
-
-                # ==========================
-                # COOLDOWN
-                # ==========================
-
-                seconds_since_trade = (
-                    time.time()
-                    - last_trade_time
-                )
-
-                if (
-                    seconds_since_trade
-                    < trade_cooldown
-                ):
-
-                    signal = (
-                        "TRADE COOLDOWN"
-                    )
-
-                # ==========================
-                # EXECUTION
-                # ==========================
-
-                if (
-                    confidence
-                    >= confidence_threshold
-                    and bot_running
-                    and active_trade == "NONE"
-                    and seconds_since_trade
-                    >= trade_cooldown
-                ):
-
-                    last_trade_time = time.time()
-
-                    threading.Thread(
-                        target=simulate_trade,
-                        args=(signal,),
-                        daemon=True
-                    ).start()
-
-                time.sleep(0.2)
-
-    except Exception as e:
-
-    status = (
-        f"RECONNECTING... {e}"
-    )
-
-    time.sleep(5)
-
-    threading.Thread(
-        target=deriv_engine,
-        daemon=True
-    ).start()
-
-    return
-
-# ======================================
-# START ENGINE
-# ======================================
-
-threading.Thread(
-    target=deriv_engine,
-    daemon=True
-).start()
+            time.sleep(5)
 
 # ======================================
 # START BOT
@@ -825,6 +811,11 @@ def dashboard():
 # ======================================
 
 if __name__ == "__main__":
+
+    threading.Thread(
+        target=deriv_engine,
+        daemon=True
+    ).start()
 
     port = int(
         os.environ.get("PORT", 8000)
