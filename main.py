@@ -125,7 +125,6 @@ def check_limits():
 
     global bot_running
 
-    # TAKE PROFIT
     if profit >= take_profit:
 
         bot_running = False
@@ -134,7 +133,6 @@ def check_limits():
             "TAKE PROFIT HIT"
         )
 
-    # STOP LOSS
     if profit <= -stop_loss:
 
         bot_running = False
@@ -143,7 +141,6 @@ def check_limits():
             "STOP LOSS HIT"
         )
 
-    # LOSS STREAK PROTECTION
     if loss_streak >= max_loss_streak:
 
         bot_running = False
@@ -151,6 +148,49 @@ def check_limits():
         status_message(
             "MAX LOSS STREAK HIT"
         )
+
+# ======================================
+# RESET SESSION
+# ======================================
+
+@app.get("/reset")
+def reset_session():
+
+    global wins
+    global losses
+    global win_rate
+    global balance
+    global profit
+    global loss_streak
+    global current_stake
+    global bot_running
+
+    wins = 0
+
+    losses = 0
+
+    win_rate = 0
+
+    balance = starting_balance
+
+    profit = 0
+
+    loss_streak = 0
+
+    current_stake = base_stake
+
+    bot_running = False
+
+    trade_history.clear()
+
+    status_message(
+        "SESSION RESET"
+    )
+
+    return RedirectResponse(
+        url="/",
+        status_code=303
+    )
 
 # ======================================
 # SIMULATED TRADE
@@ -559,7 +599,7 @@ def dashboard():
 
         <title>DIGIT DIFFER ENGINE V8</title>
 
-        <meta http-equiv="refresh" content="2">
+        <meta http-equiv="refresh" content="10">
 
         <style>
 
@@ -774,6 +814,18 @@ def dashboard():
                     style="background:red;">
 
                     STOP BOT
+
+                </button>
+
+            </form>
+
+            <form action="/reset" method="get">
+
+                <button
+                    type="submit"
+                    style="background:orange;">
+
+                    RESET SESSION
 
                 </button>
 
