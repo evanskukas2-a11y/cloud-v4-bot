@@ -78,7 +78,7 @@ last_trade_time = 0
 # CONFIG
 # ======================================
 
-TOKEN = os.getenv("DERIV_TOKEN")
+TOKEN = os.getenv("HR40jQNkg8cZ8v2")
 
 APP_ID = "1089"
 
