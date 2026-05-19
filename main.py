@@ -35,7 +35,7 @@ starting_balance = 0
 balance = 0
 base_stake = 0.35
 current_stake = 0.35
-martingale_multiplier = 2.2
+martingale_multiplier = 1.8
 take_profit = 10
 stop_loss = 10
 profit = 0
@@ -45,9 +45,9 @@ loss_streak = 0
 # SETTINGS
 # ======================================
 
-confidence_threshold = 70
+confidence_threshold = 80
 max_loss_streak = 5
-trade_cooldown = 5
+trade_cooldown = 10
 last_trade_time = 0
 
 # ======================================
@@ -111,66 +111,71 @@ def reset_session():
     return RedirectResponse(url="/", status_code=303)
 
 # ======================================
-# SIGNAL ENGINE — ODD/EVEN DETECTOR
+# SIGNAL ENGINE — OVER/UNDER DETECTOR
 # ======================================
 
 def analyse_digits(recent_digits):
     """
-    Analyses last N digits to detect ODD or EVEN bias.
-    Returns (contract_type, confidence_score)
+    Analyses last N digits to detect HIGH (5-9) or LOW (0-4) bias.
+    DIGITOVER 4 = wins if last digit is 5,6,7,8,9
+    DIGITUNDER 5 = wins if last digit is 0,1,2,3,4
+    Returns (contract_type, barrier, confidence_score)
     """
-    if len(recent_digits) < 10:
-        return None, 0
+    if len(recent_digits) < 15:
+        return None, None, 0
 
+    # Use last 20 ticks for analysis
     window = recent_digits[-20:] if len(
         recent_digits
     ) >= 20 else recent_digits
 
-    odd_count  = sum(1 for d in window if d % 2 != 0)
-    even_count = sum(1 for d in window if d % 2 == 0)
+    high_count = sum(1 for d in window if d >= 5)
+    low_count  = sum(1 for d in window if d < 5)
     total      = len(window)
 
-    odd_ratio  = odd_count  / total
-    even_ratio = even_count / total
+    high_ratio = high_count / total
+    low_ratio  = low_count  / total
 
-    # Check last 5 for momentum
-    last5     = recent_digits[-5:]
-    last5_odd = sum(1 for d in last5 if d % 2 != 0)
-    last5_even = 5 - last5_odd
+    # Momentum — last 5 ticks
+    last5      = recent_digits[-5:]
+    last5_high = sum(1 for d in last5 if d >= 5)
+    last5_low  = 5 - last5_high
 
-    # Check last 3 for streak guard
-    last3     = recent_digits[-3:]
-    last3_odd = sum(1 for d in last3 if d % 2 != 0)
+    # Streak guard — skip if last 4 all same side
+    last4      = recent_digits[-4:]
+    last4_high = sum(1 for d in last4 if d >= 5)
+    if last4_high == 4 or last4_high == 0:
+        return None, None, 0
 
-    # Skip if last 3 all same parity — may reverse
-    if last3_odd == 3 or last3_odd == 0:
-        return None, 0
+    # Streak guard — skip if last digit same 3 times
+    if len(set(recent_digits[-3:])) == 1:
+        return None, None, 0
 
-    # EVEN bias detected
-    if even_ratio >= 0.60 and last5_even >= 3:
-        conf = min(60 + int(even_ratio * 40), 95)
-        return "DIGITEVEN", conf
+    # Strong HIGH bias — trade OVER 4
+    if high_ratio >= 0.65 and last5_high >= 3:
+        conf = min(60 + int(high_ratio * 40), 95)
+        return "DIGITOVER", "4", conf
 
-    # ODD bias detected
-    if odd_ratio >= 0.60 and last5_odd >= 3:
-        conf = min(60 + int(odd_ratio * 40), 95)
-        return "DIGITODD", conf
+    # Strong LOW bias — trade UNDER 5
+    if low_ratio >= 0.65 and last5_low >= 3:
+        conf = min(60 + int(low_ratio * 40), 95)
+        return "DIGITUNDER", "5", conf
 
-    # Moderate even bias
-    if even_ratio >= 0.55 and last5_even >= 3:
-        return "DIGITEVEN", 72
+    # Moderate HIGH bias
+    if high_ratio >= 0.58 and last5_high >= 3:
+        return "DIGITOVER", "4", 80
 
-    # Moderate odd bias
-    if odd_ratio >= 0.55 and last5_odd >= 3:
-        return "DIGITODD", 72
+    # Moderate LOW bias
+    if low_ratio >= 0.58 and last5_low >= 3:
+        return "DIGITUNDER", "5", 80
 
-    return None, 25
+    return None, None, 25
 
 # ======================================
 # REAL DERIV TRADE
 # ======================================
 
-def place_real_trade(signal_name):
+def place_real_trade(signal_name, barrier):
     global wins, losses, active_trade, last_result
     global balance, current_stake, profit, loss_streak
 
@@ -193,10 +198,12 @@ def place_real_trade(signal_name):
             ws.close()
             return
 
-        # Signal name is contract type e.g. "DIGITODD" or "DIGITEVEN"
         contract_type = signal_name.strip()
-        if contract_type not in ("DIGITODD", "DIGITEVEN"):
-            contract_type = "DIGITODD"
+        if contract_type not in (
+            "DIGITOVER", "DIGITUNDER"
+        ):
+            contract_type = "DIGITOVER"
+            barrier = "4"
 
         stake = current_stake
 
@@ -211,7 +218,8 @@ def place_real_trade(signal_name):
                 "currency": "USD",
                 "duration": 5,
                 "duration_unit": "t",
-                "symbol": SYMBOL
+                "symbol": SYMBOL,
+                "barrier": barrier
             }
         }))
 
@@ -227,7 +235,7 @@ def place_real_trade(signal_name):
 
         contract_id = buy_resp["buy"]["contract_id"]
         status_message(
-            f"CONTRACT PLACED | {contract_type} | ID: {contract_id}"
+            f"CONTRACT PLACED | {contract_type} {barrier} | ID: {contract_id}"
         )
 
         # Wait for result
@@ -276,6 +284,10 @@ def place_real_trade(signal_name):
             profit        += trade_profit
             current_stake  = base_stake
             loss_streak    = 0
+            status_message(
+                f"WIN +${trade_profit} | "
+                f"Balance: ${balance}"
+            )
 
         # ========================
         # LOSS
@@ -288,13 +300,18 @@ def place_real_trade(signal_name):
                 current_stake * martingale_multiplier,
                 2
             )
+            status_message(
+                f"LOSS ${trade_profit} | "
+                f"Next Stake: ${current_stake} | "
+                f"Streak: {loss_streak}"
+            )
 
         update_win_rate()
         check_limits()
 
         last_result = result
         trade_history.appendleft(
-            f"{contract_type} | {result} | "
+            f"{contract_type} {barrier} | {result} | "
             f"Stake ${stake} | P/L ${trade_profit}"
         )
 
@@ -357,41 +374,30 @@ def deriv_engine():
                     if len(recent_digits) > 50:
                         recent_digits.pop(0)
 
-                    if len(recent_digits) < 10:
+                    if len(recent_digits) < 15:
                         signal = "COLLECTING DATA..."
                         confidence = 0
                         continue
 
                     # ==========================
-                    # ODD/EVEN SIGNAL ANALYSIS
+                    # OVER/UNDER SIGNAL
                     # ==========================
 
-                    contract_type, conf = analyse_digits(
-                        recent_digits
+                    contract_type, barrier, conf = (
+                        analyse_digits(recent_digits)
                     )
 
                     confidence = conf
 
-                    if contract_type == "DIGITEVEN":
-                        signal = "DIGITEVEN"
-                    elif contract_type == "DIGITODD":
-                        signal = "DIGITODD"
+                    if contract_type == "DIGITOVER":
+                        signal = f"DIGITOVER {barrier}"
+                    elif contract_type == "DIGITUNDER":
+                        signal = f"DIGITUNDER {barrier}"
                     else:
-                        signal = "WAITING..."
+                        signal = "WAITING FOR SIGNAL..."
 
                     # ==========================
-                    # VOLATILITY FILTER
-                    # ==========================
-
-                    same_count = recent_digits[-6:].count(
-                        recent_digits[-1]
-                    )
-                    if same_count >= 5:
-                        confidence = 5
-                        signal = "VOLATILE MARKET"
-
-                    # ==========================
-                    # COOLDOWN
+                    # COOLDOWN CHECK
                     # ==========================
 
                     seconds_since_trade = (
@@ -417,11 +423,12 @@ def deriv_engine():
                         and seconds_since_trade
                         >= trade_cooldown
                         and contract_type is not None
+                        and barrier is not None
                     ):
                         last_trade_time = time.time()
                         threading.Thread(
                             target=place_real_trade,
-                            args=(contract_type,),
+                            args=(contract_type, barrier),
                             daemon=True
                         ).start()
 
@@ -493,8 +500,8 @@ def dashboard():
     return f"""
 <html>
 <head>
-    <title>DIGIT ODD/EVEN ENGINE V9</title>
-    <meta http-equiv="refresh" content="30">
+    <title>DIGIT OVER/UNDER ENGINE V10</title>
+    <meta http-equiv="refresh" content="15">
     <style>
         body {{
             background:#0f172a;
@@ -525,10 +532,12 @@ def dashboard():
             margin:10px;
             cursor:pointer;
         }}
+        .win {{ color: #22c55e; }}
+        .loss {{ color: #ef4444; }}
     </style>
 </head>
 <body>
-    <h1>DIGIT ODD/EVEN ENGINE V9</h1>
+    <h1>DIGIT OVER/UNDER ENGINE V10</h1>
     <h2>THE VENTURED KINGS LTD — EVANS MUKUKA</h2>
 
     <div class="card">
@@ -555,6 +564,7 @@ def dashboard():
         <p>Profit/Loss: ${round(profit, 2)}</p>
         <p>Current Stake: ${current_stake}</p>
         <p>Loss Streak: {loss_streak}</p>
+        <p>Win Rate: {win_rate}%</p>
     </div>
 
     <div class="card">
