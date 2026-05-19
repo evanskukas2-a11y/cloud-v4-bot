@@ -111,6 +111,62 @@ def reset_session():
     return RedirectResponse(url="/", status_code=303)
 
 # ======================================
+# SIGNAL ENGINE — ODD/EVEN DETECTOR
+# ======================================
+
+def analyse_digits(recent_digits):
+    """
+    Analyses last N digits to detect ODD or EVEN bias.
+    Returns (contract_type, confidence_score)
+    """
+    if len(recent_digits) < 10:
+        return None, 0
+
+    window = recent_digits[-20:] if len(
+        recent_digits
+    ) >= 20 else recent_digits
+
+    odd_count  = sum(1 for d in window if d % 2 != 0)
+    even_count = sum(1 for d in window if d % 2 == 0)
+    total      = len(window)
+
+    odd_ratio  = odd_count  / total
+    even_ratio = even_count / total
+
+    # Check last 5 for momentum
+    last5     = recent_digits[-5:]
+    last5_odd = sum(1 for d in last5 if d % 2 != 0)
+    last5_even = 5 - last5_odd
+
+    # Check last 3 for streak guard
+    last3     = recent_digits[-3:]
+    last3_odd = sum(1 for d in last3 if d % 2 != 0)
+
+    # Skip if last 3 all same parity — may reverse
+    if last3_odd == 3 or last3_odd == 0:
+        return None, 0
+
+    # EVEN bias detected
+    if even_ratio >= 0.60 and last5_even >= 3:
+        conf = min(60 + int(even_ratio * 40), 95)
+        return "DIGITEVEN", conf
+
+    # ODD bias detected
+    if odd_ratio >= 0.60 and last5_odd >= 3:
+        conf = min(60 + int(odd_ratio * 40), 95)
+        return "DIGITODD", conf
+
+    # Moderate even bias
+    if even_ratio >= 0.55 and last5_even >= 3:
+        return "DIGITEVEN", 72
+
+    # Moderate odd bias
+    if odd_ratio >= 0.55 and last5_odd >= 3:
+        return "DIGITODD", 72
+
+    return None, 25
+
+# ======================================
 # REAL DERIV TRADE
 # ======================================
 
@@ -137,12 +193,10 @@ def place_real_trade(signal_name):
             ws.close()
             return
 
-        # Extract digit from signal e.g. "DIFFER 3" -> "3"
-        try:
-            barrier_digit = signal_name.strip().split()[-1]
-            int(barrier_digit)
-        except:
-            barrier_digit = "5"
+        # Signal name is contract type e.g. "DIGITODD" or "DIGITEVEN"
+        contract_type = signal_name.strip()
+        if contract_type not in ("DIGITODD", "DIGITEVEN"):
+            contract_type = "DIGITODD"
 
         stake = current_stake
 
@@ -153,12 +207,11 @@ def place_real_trade(signal_name):
             "parameters": {
                 "amount": stake,
                 "basis": "stake",
-                "contract_type": "DIGITDIFF",
+                "contract_type": contract_type,
                 "currency": "USD",
                 "duration": 5,
                 "duration_unit": "t",
-                "symbol": SYMBOL,
-                "barrier": barrier_digit
+                "symbol": SYMBOL
             }
         }))
 
@@ -174,7 +227,7 @@ def place_real_trade(signal_name):
 
         contract_id = buy_resp["buy"]["contract_id"]
         status_message(
-            f"CONTRACT PLACED | ID: {contract_id}"
+            f"CONTRACT PLACED | {contract_type} | ID: {contract_id}"
         )
 
         # Wait for result
@@ -241,7 +294,7 @@ def place_real_trade(signal_name):
 
         last_result = result
         trade_history.appendleft(
-            f"{signal_name} | {result} | "
+            f"{contract_type} | {result} | "
             f"Stake ${stake} | P/L ${trade_profit}"
         )
 
@@ -301,7 +354,7 @@ def deriv_engine():
                     last_digit = digit
                     recent_digits.append(digit)
 
-                    if len(recent_digits) > 15:
+                    if len(recent_digits) > 50:
                         recent_digits.pop(0)
 
                     if len(recent_digits) < 10:
@@ -310,51 +363,30 @@ def deriv_engine():
                         continue
 
                     # ==========================
-                    # ANALYSIS
+                    # ODD/EVEN SIGNAL ANALYSIS
                     # ==========================
 
-                    digit_counts = {}
-                    for d in recent_digits:
-                        digit_counts[d] = (
-                            digit_counts.get(d, 0) + 1
-                        )
-
-                    most_common_digit = max(
-                        digit_counts,
-                        key=digit_counts.get
+                    contract_type, conf = analyse_digits(
+                        recent_digits
                     )
 
-                    frequency = digit_counts[
-                        most_common_digit
-                    ]
+                    confidence = conf
 
-                    # ==========================
-                    # SIGNALS
-                    # ==========================
-
-                    if frequency >= 5:
-                        confidence = min(
-                            60 + (frequency * 7),
-                            95
-                        )
-                        signal = (
-                            f"DIFFER {most_common_digit}"
-                        )
-                    elif frequency == 4:
-                        confidence = 72
-                        signal = "MODERATE PRESSURE"
+                    if contract_type == "DIGITEVEN":
+                        signal = "DIGITEVEN"
+                    elif contract_type == "DIGITODD":
+                        signal = "DIGITODD"
                     else:
-                        confidence = 25
                         signal = "WAITING..."
 
                     # ==========================
                     # VOLATILITY FILTER
                     # ==========================
 
-                    same_count = recent_digits.count(
+                    same_count = recent_digits[-6:].count(
                         recent_digits[-1]
                     )
-                    if same_count >= 6:
+                    if same_count >= 5:
                         confidence = 5
                         signal = "VOLATILE MARKET"
 
@@ -370,7 +402,9 @@ def deriv_engine():
                         seconds_since_trade
                         < trade_cooldown
                     ):
-                        signal = "TRADE COOLDOWN"
+                        signal = (
+                            f"{signal} | COOLDOWN"
+                        )
 
                     # ==========================
                     # EXECUTION
@@ -382,11 +416,12 @@ def deriv_engine():
                         and active_trade == "NONE"
                         and seconds_since_trade
                         >= trade_cooldown
+                        and contract_type is not None
                     ):
                         last_trade_time = time.time()
                         threading.Thread(
                             target=place_real_trade,
-                            args=(signal,),
+                            args=(contract_type,),
                             daemon=True
                         ).start()
 
@@ -458,7 +493,7 @@ def dashboard():
     return f"""
 <html>
 <head>
-    <title>DIGIT DIFFER ENGINE V8</title>
+    <title>DIGIT ODD/EVEN ENGINE V9</title>
     <meta http-equiv="refresh" content="30">
     <style>
         body {{
@@ -493,7 +528,7 @@ def dashboard():
     </style>
 </head>
 <body>
-    <h1>DIGIT DIFFER ENGINE V8</h1>
+    <h1>DIGIT ODD/EVEN ENGINE V9</h1>
     <h2>THE VENTURED KINGS LTD — EVANS MUKUKA</h2>
 
     <div class="card">
