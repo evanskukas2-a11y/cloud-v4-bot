@@ -9,7 +9,7 @@ CONFIG
 
 =========================================
 
-TOKEN = ""
+TOKEN = "DERIV_TOKEN"
 
 SYMBOLS = [
 "R_10",
