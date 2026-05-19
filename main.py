@@ -36,7 +36,7 @@ TOKEN            = os.getenv("DERIV_TOKEN")
 APP_ID           = "1089"
 SYMBOL           = "R_10"
 TRADE_COOLDOWN   = 10
-PREDICTIONS      = 4
+PREDICTIONS      = 10
 last_trade_time  = 0
 confidence_threshold = 65
 
